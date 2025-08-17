@@ -1,0 +1,173 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { LoginForm } from "@/components/login-form"
+import { AdminDashboard } from "@/components/admin-dashboard"
+import { PartnerDashboard } from "@/components/partner-dashboard"
+import { useAuth } from "@/lib/auth-context"
+import { createClient } from "@/lib/supabase/client"
+import HomePage from "@/app/home/page"
+
+interface UserProfile {
+  id: string
+  email: string
+  full_name: string
+  user_type?: "admin" | "partner" | "captador"
+  is_active?: boolean
+}
+
+export default function AtriaApp() {
+  const { user, loading, logout } = useAuth()
+  const [showLogin, setShowLogin] = useState(false)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(false)
+  const supabase = createClient()
+
+  useEffect(() => {
+    if (user && !userProfile) {
+      loadUserProfile()
+    }
+  }, [user])
+
+  const loadUserProfile = async () => {
+    if (!user) return
+
+    setProfileLoading(true)
+    try {
+      console.log("[v0] Loading user profile for:", user.email)
+
+      try {
+        const { data, error } = await supabase
+          .from("user_profiles")
+          .select("id, user_id, full_name, email, user_type, agency_id, is_active")
+          .eq("user_id", user.id)
+          .single()
+
+        if (data && !error) {
+          console.log("[v0] User profile loaded from database:", data)
+          setUserProfile({
+            id: data.id,
+            email: data.email,
+            full_name: data.full_name,
+            user_type: data.user_type,
+            is_active: data.is_active,
+          })
+          return
+        }
+      } catch (dbError) {
+        console.log("[v0] User profile not found, using auth data:", dbError)
+      }
+
+      console.log("[v0] Using auth user data as fallback")
+      const userType = getUserTypeFromEmail(user.email)
+      setUserProfile({
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || user.email.split("@")[0],
+        user_type: userType,
+        is_active: true,
+      })
+    } catch (error) {
+      console.error("[v0] Error loading user profile:", error)
+      const userType = getUserTypeFromEmail(user.email)
+      setUserProfile({
+        id: user.id,
+        email: user.email,
+        full_name: user.email.split("@")[0],
+        user_type: userType,
+        is_active: true,
+      })
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
+  const getUserTypeFromEmail = (email: string): "admin" | "partner" | "captador" => {
+    const emailLower = email.toLowerCase()
+
+    if (emailLower.includes("admin") || emailLower.includes("atria") || emailLower.includes("administrador")) {
+      return "admin"
+    }
+    if (emailLower.includes("captador") || emailLower.includes("capt")) {
+      return "captador"
+    }
+    return "partner"
+  }
+
+  const handleShowLogin = () => {
+    console.log("[v0] Show login triggered")
+    setShowLogin(true)
+  }
+
+  const handleLoginSuccess = () => {
+    setShowLogin(false)
+  }
+
+  const handleLogout = async () => {
+    try {
+      console.log("[v0] Logging out user")
+      await logout()
+      setUserProfile(null)
+      setShowLogin(false)
+    } catch (error) {
+      console.error("[v0] Logout error:", error)
+    }
+  }
+
+  console.log(
+    "[v0] Render state - isLoading:",
+    loading,
+    "showLogin:",
+    showLogin,
+    "currentUser:",
+    !!user,
+    "userProfile:",
+    !!userProfile,
+  )
+
+  if (loading || (user && profileLoading)) {
+    console.log("[v0] Rendering loading screen")
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-8">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-20 w-20 border-4 border-border border-t-primary mx-auto"></div>
+          </div>
+          <div className="space-y-3">
+            <h2 className="text-3xl font-semibold text-foreground">Atria</h2>
+            <p className="text-muted-foreground text-lg">Carregando sua plataforma...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (showLogin && !user) {
+    console.log("[v0] Rendering login form")
+    return <LoginForm onLoginSuccess={handleLoginSuccess} />
+  }
+
+  if (user && userProfile) {
+    const legacyUser = {
+      id: userProfile.id,
+      email: userProfile.email,
+      name: userProfile.full_name || userProfile.email.split("@")[0],
+      userType: userProfile.user_type || "partner",
+      isActive: userProfile.is_active || true,
+    }
+
+    console.log("[v0] Rendering dashboard for user type:", userProfile.user_type)
+    if (userProfile.user_type === "admin") {
+      return <AdminDashboard user={legacyUser} onLogout={handleLogout} />
+    }
+
+    if (userProfile.user_type === "captador") {
+      return <PartnerDashboard user={legacyUser} onLogout={handleLogout} dashboardType="captador" />
+    }
+
+    return <PartnerDashboard user={legacyUser} onLogout={handleLogout} dashboardType="partner" />
+  }
+
+  console.log("[v0] Rendering HomePage")
+  return <HomePage onShowLogin={handleShowLogin} />
+}
