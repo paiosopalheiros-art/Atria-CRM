@@ -3,15 +3,33 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsTrigger, TabsList } from "@/components/ui/tabs"
-import { Building2, LogOut, Plus, TrendingUp, Eye, MessageSquare, Bell, Home, Calendar, Target, BarChart3, Clock, Award } from 'lucide-react'
+import {
+  Building2,
+  LogOut,
+  Plus,
+  TrendingUp,
+  Eye,
+  MessageSquare,
+  Bell,
+  Home,
+  Calendar,
+  Target,
+  BarChart3,
+  Clock,
+  Award,
+  Filter,
+} from "lucide-react"
 import { PropertyUploadDialog, type Property } from "./property-upload-dialog"
 import { PropertyFeed } from "./property-feed"
 import { ProposalManagement } from "./proposal-management"
-import { ClientManagement } from "./client-management"
 import { NotificationsModal } from "./notifications-modal"
 import { UserSettingsModal } from "./user-settings-modal"
 import AIAssistant from "./ai-assistant"
 import GamificationSystem from "./gamification-system"
+import CommissionManager from "./commission-manager"
+import BrokerProfile from "./broker-profile"
+import RankingLeaderboard from "./ranking-leaderboard"
+import BoostManager from "./boost-manager"
 import type { User } from "@/app/page"
 import type { Proposal } from "./property-proposal-form"
 import { supabase } from "@/lib/supabase/client"
@@ -19,11 +37,12 @@ import { supabase } from "@/lib/supabase/client"
 interface PartnerDashboardProps {
   user: User
   onLogout: () => void
-  dashboardType?: "captador" | "partner"
 }
 
 interface PartnerStats {
   totalProperties: number
+  capturedProperties: number
+  saleProperties: number
   activeProperties: number
   totalViews: number
   totalProposals: number
@@ -66,12 +85,15 @@ interface PropertyStatusUpdate {
   buyerInfo?: string
 }
 
-export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: PartnerDashboardProps) {
+export function PartnerDashboard({ user, onLogout }: PartnerDashboardProps) {
   const [properties, setProperties] = useState<Property[]>([])
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
+  const [propertyFilter, setPropertyFilter] = useState<"all" | "captured" | "sale">("all")
   const [stats, setStats] = useState<PartnerStats>({
     totalProperties: 0,
+    capturedProperties: 0,
+    saleProperties: 0,
     activeProperties: 0,
     totalViews: 0,
     totalProposals: 0,
@@ -99,39 +121,51 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
 
         let formattedProperties: Property[] = []
         try {
-          const { data: propertiesData, error: propertiesError } = await supabase
-            .from("properties")
-            .select("*")
-            .eq("agency_id", user.agencyId || "default-agency") // Using agency_id instead of user_id
+          // Get user's agency_id from user_profiles table
+          const { data: userProfile } = await supabase
+            .from("user_profiles")
+            .select("agency_id")
+            .eq("user_id", user.id)
+            .single()
 
-          if (propertiesError) {
-            console.log("[v0] Properties table error:", propertiesError)
-          } else {
-            formattedProperties =
-              propertiesData?.map((p) => ({
-                id: p.id,
-                title: p.title,
-                description: p.description,
-                price: p.price,
-                type: p.property_type,
-                bedrooms: p.bedrooms || 0,
-                bathrooms: p.bathrooms || 0,
-                area: p.area || 0,
-                lotArea: p.lot_area || 0,
-                address: p.address,
-                city: p.city,
-                state: p.state,
-                zipCode: p.zip_code,
-                images: [],
-                features: [],
-                status: p.status,
-                approvalStatus: "approved",
-                userId: user.id,
-                userType: user.userType,
-                createdAt: p.created_at,
-                updatedAt: p.updated_at,
-                views: 0,
-              })) || []
+          const agencyId = userProfile?.agency_id
+
+          if (agencyId) {
+            const { data: propertiesData, error: propertiesError } = await supabase
+              .from("properties")
+              .select("*")
+              .eq("agency_id", agencyId)
+
+            if (propertiesError) {
+              console.log("[v0] Properties table error:", propertiesError)
+            } else {
+              formattedProperties =
+                propertiesData?.map((p) => ({
+                  id: p.id,
+                  title: p.title,
+                  description: p.description,
+                  price: p.price_sale || p.price_rent || 0,
+                  type: p.type || "house",
+                  bedrooms: p.rooms || 0,
+                  bathrooms: p.bathrooms || 1,
+                  area: p.area_total || 0,
+                  lotArea: p.area_land || 0,
+                  address: p.address,
+                  city: p.city,
+                  state: p.state,
+                  zipCode: p.zip_code,
+                  images: [],
+                  features: [],
+                  status: p.status,
+                  approvalStatus: "approved",
+                  userId: user.id,
+                  userType: user.userType,
+                  source: p.source || "sale",
+                  createdAt: p.created_at,
+                  updatedAt: p.updated_at,
+                  views: 0,
+                })) || []
+            }
           }
         } catch (error) {
           console.log("[v0] Error fetching properties:", error)
@@ -199,9 +233,14 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
 
         setActivities(formattedActivities)
 
+        const capturedProperties = formattedProperties.filter((p) => p.source === "captured")
+        const saleProperties = formattedProperties.filter((p) => p.source === "sale")
+
         setStats((prevStats) => ({
           ...prevStats,
           totalProperties: formattedProperties.length,
+          capturedProperties: capturedProperties.length,
+          saleProperties: saleProperties.length,
           activeProperties: formattedProperties.filter((p) => p.status === "available").length,
           soldProperties: formattedProperties.filter((p) => p.status === "sold").length,
           totalProposals: formattedProposals.length,
@@ -215,6 +254,8 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
 
         console.log("[v0] Successfully loaded data:", {
           properties: formattedProperties.length,
+          captured: capturedProperties.length,
+          sale: saleProperties.length,
           proposals: formattedProposals.length,
           activities: formattedActivities.length,
         })
@@ -226,6 +267,8 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
         setStats((prevStats) => ({
           ...prevStats,
           totalProperties: 0,
+          capturedProperties: 0,
+          saleProperties: 0,
           activeProperties: 0,
           soldProperties: 0,
           totalProposals: 0,
@@ -246,10 +289,11 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
     localStorage.setItem("atria-properties", JSON.stringify(updatedProperties))
   }
 
-  const addProperty = (propertyData: Omit<Property, "id" | "createdAt">) => {
+  const addProperty = (propertyData: Omit<Property, "id" | "createdAt">, source: "captured" | "sale" = "sale") => {
     const newProperty: Property = {
       ...propertyData,
       id: Date.now().toString(),
+      source,
       createdAt: new Date().toISOString(),
       views: 0,
     }
@@ -259,7 +303,7 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
     const newActivity: Activity = {
       id: Date.now().toString(),
       type: "property_added",
-      message: `Nova propriedade adicionada: ${newProperty.title}`,
+      message: `Nova propriedade ${source === "captured" ? "captada" : "cadastrada"}: ${newProperty.title}`,
       timestamp: new Date().toISOString(),
       propertyId: newProperty.id,
     }
@@ -275,6 +319,13 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
   }
 
   const myProperties = properties.filter((p) => p.userId === user.id)
+
+  const filteredProperties = myProperties.filter((p) => {
+    if (propertyFilter === "captured") return p.source === "captured"
+    if (propertyFilter === "sale") return p.source === "sale"
+    return true // "all"
+  })
+
   const goalProgress = (stats.currentMonthSales / stats.monthlyGoal) * 100
 
   const getUserInitials = (fullName: string | undefined) => {
@@ -288,11 +339,11 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
   }
 
   const getDashboardTitle = () => {
-    return dashboardType === "captador" ? "Captador de Imóveis" : "Parceiro de Vendas"
+    return "Parceiro"
   }
 
   const getDashboardDescription = () => {
-    return dashboardType === "captador" ? "Capture e gerencie propriedades" : "Venda e gerencie clientes"
+    return "Capture e venda propriedades em uma única plataforma"
   }
 
   const handleUpdateUser = (updatedUser: User) => {
@@ -322,7 +373,7 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
         if (update.newStatus === "sold" && update.saleValue) {
           const commissionPercentage = 5 // 5% fixed commission
           const totalCommission = (update.saleValue * commissionPercentage) / 100
-          const atriaShare = dashboardType === "captador" ? totalCommission * 0.2 : totalCommission * 0.5 // 20% for captador properties, 50% for platform properties
+          const atriaShare = p.source === "captured" ? totalCommission * 0.2 : totalCommission * 0.5 // 20% for captador properties, 50% for platform properties
           const captadorShare = totalCommission - atriaShare
 
           const newRepayment: CommissionRepayment = {
@@ -406,7 +457,7 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
                 </div>
                 <div>
                   <h1 className="text-2xl font-semibold text-gray-900">Atria</h1>
-                  <p className="text-sm text-gray-600">Dashboard do {getDashboardTitle()}</p>
+                  <p className="text-sm text-gray-600">Dashboard do Parceiro</p>
                 </div>
               </div>
             </div>
@@ -432,9 +483,7 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
               >
                 <div className="text-right">
                   <p className="text-sm font-medium text-gray-900">{user.fullName || user.name || "Usuário"}</p>
-                  <p className="text-xs text-gray-500">
-                    {getDashboardTitle()} • CRECI: {user.creci || "N/A"}
-                  </p>
+                  <p className="text-xs text-gray-500">Parceiro • CRECI: {user.creci || "N/A"}</p>
                 </div>
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                   <span className="text-sm font-medium text-blue-600">
@@ -469,7 +518,7 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
               <h2 className="text-3xl font-bold text-gray-900 mb-2">
                 Bem-vindo, {user.fullName || user.name || "Usuário"}!
               </h2>
-              <p className="text-gray-600">{getDashboardDescription()}</p>
+              <p className="text-gray-600">Capture e venda propriedades em uma única plataforma</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -484,9 +533,9 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
                 </div>
                 <div className="space-y-2">
                   <p className="text-3xl font-bold text-gray-900">{stats.totalProperties}</p>
-                  <p className="text-sm font-medium text-gray-700">Propriedades</p>
+                  <p className="text-sm font-medium text-gray-700">Total Propriedades</p>
                   <p className="text-xs text-gray-500">
-                    {stats.activeProperties} ativas • {stats.soldProperties} vendidas
+                    {stats.capturedProperties} captadas • {stats.saleProperties} à venda
                   </p>
                 </div>
               </div>
@@ -651,7 +700,7 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
                     value="properties"
                     className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
                   >
-                    {dashboardType === "captador" ? "Propriedades Captadas" : "Propriedades"}
+                    Propriedades
                   </TabsTrigger>
                   <TabsTrigger
                     value="proposals"
@@ -664,6 +713,12 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
                     className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
                   >
                     Clientes
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="commissions"
+                    className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
+                  >
+                    Comissões
                   </TabsTrigger>
                   <TabsTrigger
                     value="ai-assistant"
@@ -684,6 +739,26 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
                   >
                     Gamificação
                   </TabsTrigger>
+                  <TabsTrigger
+                    value="profile"
+                    className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
+                  >
+                    Meu Perfil
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="ranking"
+                    className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Ranking
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="boost"
+                    className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
+                  >
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    Boost
+                  </TabsTrigger>
                 </TabsList>
 
                 <Button
@@ -691,7 +766,7 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
                   className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-sm"
                 >
                   <Plus className="h-4 w-4" />
-                  {dashboardType === "captador" ? "Captar Propriedade" : "Nova Propriedade"}
+                  Nova Propriedade
                 </Button>
               </div>
 
@@ -708,18 +783,51 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
               <TabsContent value="properties" className="space-y-6">
                 <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      {dashboardType === "captador" ? "Propriedades Captadas" : "Propriedades"}
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      {dashboardType === "captador"
-                        ? "Propriedades que você captou para a plataforma"
-                        : "Propriedades que você cadastrou"}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">Propriedades</h2>
+                        <p className="text-sm text-gray-600">Gerencie suas propriedades captadas e à venda</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4 text-gray-500" />
+                        <div className="flex bg-gray-100 rounded-lg p-1">
+                          <button
+                            onClick={() => setPropertyFilter("all")}
+                            className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                              propertyFilter === "all"
+                                ? "bg-white text-gray-900 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900"
+                            }`}
+                          >
+                            Todas ({stats.totalProperties})
+                          </button>
+                          <button
+                            onClick={() => setPropertyFilter("captured")}
+                            className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                              propertyFilter === "captured"
+                                ? "bg-white text-gray-900 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900"
+                            }`}
+                          >
+                            Captadas ({stats.capturedProperties})
+                          </button>
+                          <button
+                            onClick={() => setPropertyFilter("sale")}
+                            className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                              propertyFilter === "sale"
+                                ? "bg-white text-gray-900 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900"
+                            }`}
+                          >
+                            À Venda ({stats.saleProperties})
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div className="p-6">
                     <PropertyFeed
-                      properties={properties}
+                      properties={filteredProperties}
                       currentUserId={user.id}
                       onShareProperty={handleShareProperty}
                     />
@@ -743,12 +851,49 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
                 <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200">
                     <h2 className="text-lg font-semibold text-gray-900">Gerenciar Clientes</h2>
-                    <p className="text-sm text-gray-600">Cadastre e acompanhe seus clientes e visitas</p>
+                    <p className="text-sm text-gray-600">Acompanhe propostas e interessados</p>
                   </div>
                   <div className="p-6">
-                    <ClientManagement currentUserId={user.id} />
+                    <div className="space-y-4">
+                      {proposals.length > 0 ? (
+                        proposals.map((proposal) => (
+                          <div key={proposal.id} className="border rounded-lg p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h3 className="font-semibold">{proposal.clientName}</h3>
+                                <p className="text-sm text-gray-600">{proposal.clientEmail}</p>
+                                <p className="text-sm text-gray-600">{proposal.clientPhone}</p>
+                              </div>
+                              <span
+                                className={`px-2 py-1 rounded text-xs ${
+                                  proposal.status === "pending"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : proposal.status === "accepted"
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {proposal.status}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 mt-2">{proposal.message}</p>
+                            <p className="text-sm font-medium mt-2">
+                              Proposta: R$ {proposal.proposedPrice?.toLocaleString()}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <p>Nenhuma proposta de cliente ainda</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="commissions" className="space-y-6">
+                <CommissionManager />
               </TabsContent>
 
               <TabsContent value="ai-assistant" className="space-y-6">
@@ -834,12 +979,48 @@ export function PartnerDashboard({ user, onLogout, dashboardType = "partner" }: 
                   </div>
                 </div>
               </TabsContent>
+
+              <TabsContent value="profile" className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-lg font-semibold text-gray-900">Meu Perfil</h2>
+                    <p className="text-sm text-gray-600">Métricas detalhadas e histórico de performance</p>
+                  </div>
+                  <div className="p-6">
+                    <BrokerProfile userId={user.id} />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="ranking" className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-lg font-semibold text-gray-900">Ranking de Corretores</h2>
+                    <p className="text-sm text-gray-600">Veja sua posição no ranking e compete com outros corretores</p>
+                  </div>
+                  <div className="p-6">
+                    <RankingLeaderboard currentUserId={user.id} />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="boost" className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-lg font-semibold text-gray-900">Boost de Propriedades</h2>
+                    <p className="text-sm text-gray-600">Destaque suas propriedades no feed para maior visibilidade</p>
+                  </div>
+                  <div className="p-6">
+                    <BoostManager userId={user.id} />
+                  </div>
+                </div>
+              </TabsContent>
             </Tabs>
 
             <PropertyUploadDialog
               open={isUploadDialogOpen}
               onOpenChange={setIsUploadDialogOpen}
-              onAddProperty={addProperty}
+              onAddProperty={(propertyData) => addProperty(propertyData, "sale")} // Default to sale, can be changed in dialog
               userId={user.id}
               userName={user.fullName || user.name || "Usuário"}
             />

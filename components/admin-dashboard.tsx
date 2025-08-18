@@ -5,15 +5,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsTrigger, TabsList } from "@/components/ui/tabs"
-import { Users, LogOut, UserPlus, Building2, Eye, MessageSquare, MapPin, Bed, Bath, Car, Ruler, Trash2 } from 'lucide-react'
+import {
+  Users,
+  LogOut,
+  UserPlus,
+  Building2,
+  Eye,
+  MessageSquare,
+  MapPin,
+  Bed,
+  Bath,
+  Car,
+  Ruler,
+  Trash2,
+} from "lucide-react"
 import { ProposalManagement } from "./proposal-management"
 import { ContractManagement } from "./contract-management"
 import AIAssistant from "./ai-assistant"
-import { GamificationSystem } from "./gamification-system"
 import type { Property } from "./property-upload-dialog"
 import type { Proposal } from "./property-proposal-form"
 import type { User } from "@/app/page"
 import { supabase } from "@/lib/supabase/client"
+
+import SubscriptionManager from "./subscription-manager"
+import RankingLeaderboard from "./ranking-leaderboard"
+import BoostManager from "./boost-manager"
 
 interface AdminDashboardProps {
   user: User
@@ -652,6 +668,24 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
               Assistente IA
             </TabsTrigger>
             <TabsTrigger
+              value="subscriptions"
+              className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
+            >
+              Planos
+            </TabsTrigger>
+            <TabsTrigger
+              value="ranking"
+              className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
+            >
+              Ranking Global
+            </TabsTrigger>
+            <TabsTrigger
+              value="boost-admin"
+              className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
+            >
+              Boost Admin
+            </TabsTrigger>
+            <TabsTrigger
               value="activity"
               className="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 bg-transparent rounded-none"
             >
@@ -1212,10 +1246,47 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
           </TabsContent>
 
           <TabsContent value="ai-assistant">
-            <AIAssistant />
+            <Card>
+              <CardHeader>
+                <CardTitle>Assistente IA</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AIAssistant />
+              </CardContent>
+            </Card>
           </TabsContent>
-          <TabsContent value="gamification">
-            <GamificationSystem userId={user.id} />
+
+          <TabsContent value="subscriptions">
+            <Card>
+              <CardHeader>
+                <CardTitle>Gerenciamento de Planos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SubscriptionManager />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="ranking">
+            <Card>
+              <CardHeader>
+                <CardTitle>Ranking Global de Corretores</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RankingLeaderboard currentUserId={user.id} isAdmin={true} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="boost-admin">
+            <Card>
+              <CardHeader>
+                <CardTitle>Administração de Boosts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <BoostManager userId={user.id} isAdmin={true} />
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

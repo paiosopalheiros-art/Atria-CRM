@@ -57,7 +57,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
       // Get user profile from user_profiles table
       const { data: profile, error: profileError } = await supabase
         .from("user_profiles")
-        .select("full_name, email, phone, creci, bio, avatar_url")
+        .select("full_name, email, phone, creci, bio")
         .eq("user_id", user.id)
         .single()
 
@@ -69,7 +69,6 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
           creci: profile.creci || "",
           bio: profile.bio || "",
         })
-        setAvatarUrl(profile.avatar_url || "")
       } else {
         // Fallback to auth user data
         setFormData({
@@ -81,15 +80,9 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
         })
       }
 
-      // Load notification preferences
-      const { data: notifPrefs } = await supabase
-        .from("user_profiles")
-        .select("notification_preferences")
-        .eq("user_id", user.id)
-        .single()
-
-      if (notifPrefs?.notification_preferences) {
-        setNotifications(notifPrefs.notification_preferences)
+      const savedNotifications = localStorage.getItem("notification_preferences")
+      if (savedNotifications) {
+        setNotifications(JSON.parse(savedNotifications))
       }
     } catch (error) {
       console.error("[v0] Error loading user profile:", error)
@@ -114,6 +107,18 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
     setUploadingAvatar(true)
     try {
       console.log("[v0] Uploading avatar...")
+
+      const { data: buckets } = await supabase.storage.listBuckets()
+      const avatarsBucketExists = buckets?.some((bucket) => bucket.name === "avatars")
+
+      if (!avatarsBucketExists) {
+        console.log("[v0] Creating avatars bucket...")
+        await supabase.storage.createBucket("avatars", {
+          public: true,
+          allowedMimeTypes: ["image/*"],
+          fileSizeLimit: 5242880, // 5MB
+        })
+      }
 
       // Generate unique filename
       const fileExt = file.name.split(".").pop()
@@ -146,6 +151,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
 
       setAvatarUrl(publicUrl)
       console.log("[v0] Avatar uploaded successfully")
+      alert("Avatar atualizado com sucesso!")
     } catch (error) {
       console.error("[v0] Avatar upload error:", error)
       alert("Erro ao fazer upload da imagem. Tente novamente.")
@@ -175,7 +181,6 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
         phone: formData.phone,
         creci: formData.creci,
         bio: formData.bio,
-        notification_preferences: notifications,
         updated_at: new Date().toISOString(),
       }
 
@@ -196,6 +201,8 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
       if (error) {
         throw error
       }
+
+      localStorage.setItem("notification_preferences", JSON.stringify(notifications))
 
       console.log("[v0] Profile saved successfully")
       alert("Perfil atualizado com sucesso!")
@@ -247,34 +254,34 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
             Configurações da Conta
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="profile" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="profile" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
             <TabsTrigger value="profile">Perfil</TabsTrigger>
             <TabsTrigger value="notifications">Notificações</TabsTrigger>
             <TabsTrigger value="data">Dados</TabsTrigger>
           </TabsList>
 
-          <div className="overflow-y-auto max-h-96">
-            <TabsContent value="profile" className="space-y-4">
-              <div className="flex items-center gap-4 p-4 border rounded-lg">
+          <div className="flex-1 overflow-y-auto py-4 space-y-4">
+            <TabsContent value="profile" className="space-y-6 mt-0">
+              <div className="flex items-center gap-6 p-6 border rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50">
                 <div className="relative">
-                  <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                  <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-lg">
                     {avatarUrl ? (
                       <img src={avatarUrl || "/placeholder.svg"} alt="Avatar" className="w-full h-full object-cover" />
                     ) : (
-                      <User className="h-8 w-8 text-gray-400" />
+                      <User className="h-10 w-10 text-gray-400" />
                     )}
                   </div>
-                  <label className="absolute -bottom-1 -right-1 bg-blue-600 text-white p-1 rounded-full cursor-pointer hover:bg-blue-700">
-                    <Camera className="h-3 w-3" />
+                  <label className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700 shadow-lg transition-colors">
+                    <Camera className="h-4 w-4" />
                     <input
                       type="file"
                       accept="image/*"
@@ -285,125 +292,147 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
                   </label>
                 </div>
                 <div>
-                  <h4 className="font-medium">Foto do Perfil</h4>
-                  <p className="text-sm text-gray-500">
-                    {uploadingAvatar ? "Enviando..." : "Clique no ícone para alterar"}
+                  <h4 className="font-semibold text-lg">Foto do Perfil</h4>
+                  <p className="text-sm text-gray-600">
+                    {uploadingAvatar ? "Enviando..." : "Clique no ícone da câmera para alterar sua foto"}
                   </p>
+                  <p className="text-xs text-gray-500 mt-1">Formatos aceitos: JPG, PNG (máx. 5MB)</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="fullName">Nome Completo</Label>
-                  <Input
-                    id="fullName"
-                    value={formData.fullName}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))}
-                  />
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName" className="text-sm font-medium">
+                      Nome Completo
+                    </Label>
+                    <Input
+                      id="fullName"
+                      value={formData.fullName}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))}
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-sm font-medium">
+                      Email
+                    </Label>
+                    <Input id="email" type="email" value={formData.email} disabled className="bg-gray-50 h-11" />
+                    <p className="text-xs text-gray-500">O email não pode ser alterado</p>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" value={formData.email} disabled className="bg-gray-50" />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-sm font-medium">
+                      Telefone
+                    </Label>
+                    <Input
+                      id="phone"
+                      value={formData.phone}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                      placeholder="(11) 99999-9999"
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="creci" className="text-sm font-medium">
+                      CRECI
+                    </Label>
+                    <Input
+                      id="creci"
+                      value={formData.creci}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, creci: e.target.value }))}
+                      placeholder="Ex: 123456-F"
+                      className="h-11"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="creci">CRECI</Label>
-                  <Input
-                    id="creci"
-                    value={formData.creci}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, creci: e.target.value }))}
-                  />
-                </div>
-              </div>
 
-              <div>
-                <Label htmlFor="bio">Biografia Profissional</Label>
-                <Textarea
-                  id="bio"
-                  placeholder="Conte um pouco sobre sua experiência no mercado imobiliário..."
-                  value={formData.bio}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, bio: e.target.value }))}
-                  rows={3}
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="bio" className="text-sm font-medium">
+                    Biografia Profissional
+                  </Label>
+                  <Textarea
+                    id="bio"
+                    placeholder="Conte um pouco sobre sua experiência no mercado imobiliário..."
+                    value={formData.bio}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, bio: e.target.value }))}
+                    rows={4}
+                    className="resize-none"
+                  />
+                </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="notifications" className="space-y-4">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Notificações por Email</Label>
-                    <p className="text-sm text-gray-500">Receber notificações no seu email</p>
+            <TabsContent value="notifications" className="space-y-6 mt-0">
+              <div className="space-y-6">
+                <div className="grid gap-6">
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Notificações por Email</Label>
+                      <p className="text-sm text-gray-500">Receber notificações importantes no seu email</p>
+                    </div>
+                    <Switch
+                      checked={notifications.email}
+                      onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, email: checked }))}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.email}
-                    onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, email: checked }))}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Notificações Push</Label>
-                    <p className="text-sm text-gray-500">Notificações no navegador</p>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Notificações Push</Label>
+                      <p className="text-sm text-gray-500">Notificações instantâneas no navegador</p>
+                    </div>
+                    <Switch
+                      checked={notifications.push}
+                      onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, push: checked }))}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.push}
-                    onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, push: checked }))}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Novas Propostas</Label>
-                    <p className="text-sm text-gray-500">Alertas para propostas recebidas</p>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Novas Propostas</Label>
+                      <p className="text-sm text-gray-500">Alertas quando receber propostas para seus imóveis</p>
+                    </div>
+                    <Switch
+                      checked={notifications.proposals}
+                      onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, proposals: checked }))}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.proposals}
-                    onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, proposals: checked }))}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Status de Propriedades</Label>
-                    <p className="text-sm text-gray-500">Atualizações sobre suas propriedades</p>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Status de Propriedades</Label>
+                      <p className="text-sm text-gray-500">Atualizações sobre mudanças nas suas propriedades</p>
+                    </div>
+                    <Switch
+                      checked={notifications.properties}
+                      onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, properties: checked }))}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.properties}
-                    onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, properties: checked }))}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Contratos</Label>
-                    <p className="text-sm text-gray-500">Notificações sobre contratos</p>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Contratos</Label>
+                      <p className="text-sm text-gray-500">Notificações sobre assinatura e status de contratos</p>
+                    </div>
+                    <Switch
+                      checked={notifications.contracts}
+                      onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, contracts: checked }))}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.contracts}
-                    onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, contracts: checked }))}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Sistema</Label>
-                    <p className="text-sm text-gray-500">Atualizações do sistema</p>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Sistema</Label>
+                      <p className="text-sm text-gray-500">Atualizações importantes do sistema e manutenções</p>
+                    </div>
+                    <Switch
+                      checked={notifications.system}
+                      onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, system: checked }))}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.system}
-                    onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, system: checked }))}
-                  />
                 </div>
               </div>
             </TabsContent>
@@ -441,11 +470,11 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
           </div>
         </Tabs>
 
-        <div className="flex justify-end gap-3 pt-4 border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <div className="flex justify-end gap-3 pt-6 border-t flex-shrink-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="px-6">
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={loading}>
+          <Button onClick={handleSave} disabled={loading} className="px-6">
             <Save className="h-4 w-4 mr-2" />
             {loading ? "Salvando..." : "Salvar Alterações"}
           </Button>

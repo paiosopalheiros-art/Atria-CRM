@@ -12,7 +12,7 @@ interface UserProfile {
   id: string
   email: string
   full_name: string
-  user_type?: "admin" | "partner" | "captador"
+  user_type?: "admin" | "partner"
   is_active?: boolean
 }
 
@@ -82,15 +82,13 @@ export default function AtriaApp() {
     }
   }
 
-  const getUserTypeFromEmail = (email: string): "admin" | "partner" | "captador" => {
+  const getUserTypeFromEmail = (email: string): "admin" | "partner" => {
     const emailLower = email.toLowerCase()
 
     if (emailLower.includes("admin") || emailLower.includes("atria") || emailLower.includes("administrador")) {
       return "admin"
     }
-    if (emailLower.includes("captador") || emailLower.includes("capt")) {
-      return "captador"
-    }
+    // Everyone else is a partner (includes captadores, vendedores, etc.)
     return "partner"
   }
 
@@ -161,11 +159,7 @@ export default function AtriaApp() {
       return <AdminDashboard user={legacyUser} onLogout={handleLogout} />
     }
 
-    if (userProfile.user_type === "captador") {
-      return <PartnerDashboard user={legacyUser} onLogout={handleLogout} dashboardType="captador" />
-    }
-
-    return <PartnerDashboard user={legacyUser} onLogout={handleLogout} dashboardType="partner" />
+    return <PartnerDashboard user={legacyUser} onLogout={handleLogout} />
   }
 
   console.log("[v0] Rendering HomePage")

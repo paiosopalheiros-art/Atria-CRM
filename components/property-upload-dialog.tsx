@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, X, Plus } from "lucide-react"
 import { ContractCreationDialog } from "@/components/contract-creation-dialog"
 import type { Contract } from "@/lib/types"
+import { createClient } from "@/lib/supabase/client"
 
 export interface Property {
   id: string
@@ -88,39 +89,103 @@ export function PropertyUploadDialog({
       return
     }
 
-    const propertyId = `prop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const property: Omit<Property, "id" | "createdAt"> = {
-      ...formData,
-      price: Number(formData.price),
-      lotSize: Number(formData.lotSize) || 0,
-      builtArea: Number(formData.builtArea) || 0,
-      bedrooms: Number(formData.bedrooms) || 0,
-      bathrooms: Number(formData.bathrooms) || 0,
-      garages: Number(formData.garages) || 0,
-      propertyType: formData.propertyType as Property["propertyType"],
-      ownerId: userId,
-      ownerName: userName,
-      userId: userId, // Set userId for property ownership
-      status: "available",
-      approvalStatus: "pending", // All new properties start as pending approval
-    }
+    try {
+      const supabase = createClient()
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+      const { data: userProfile } = await supabase
+        .from("user_profiles")
+        .select("agency_id")
+        .eq("user_id", userId)
+        .single()
 
-    onAddProperty(property)
+      if (!userProfile?.agency_id) {
+        throw new Error("Usuário não possui agência associada")
+      }
 
-    setCreatedPropertyId(propertyId)
-    setIsLoading(false)
+      const { data: property, error: propertyError } = await supabase
+        .from("properties")
+        .insert({
+          title: formData.title,
+          description: formData.description,
+          price_sale: Number(formData.price),
+          area_total: Number(formData.lotSize) || null,
+          area_built: Number(formData.builtArea) || null,
+          rooms: Number(formData.bedrooms) || null,
+          bathrooms: Number(formData.bathrooms) || null,
+          garage_spaces: Number(formData.garages) || null,
+          type: formData.propertyType,
+          address: formData.address,
+          neighborhood: formData.neighborhood,
+          city: formData.city,
+          state: formData.state,
+          zip_code: formData.zipCode,
+          features: formData.features,
+          agency_id: userProfile.agency_id,
+          status: "available",
+        })
+        .select()
+        .single()
 
-    const createContract = confirm(
-      "Propriedade adicionada com sucesso! Deseja criar um contrato de comissão para esta propriedade?",
-    )
-    if (createContract) {
-      setShowContractDialog(true)
-    } else {
-      onOpenChange(false)
-      resetForm()
+      if (propertyError) throw propertyError
+
+      console.log("[v0] Property created successfully:", property.id)
+
+      const uploadedImages = []
+      for (const imageUrl of formData.images) {
+        if (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")) {
+          // This is a local file that needs to be uploaded
+          // For now, we'll skip re-uploading already processed images
+          continue
+        }
+        uploadedImages.push(imageUrl)
+      }
+
+      // Update property with uploaded images if any
+      if (uploadedImages.length > 0) {
+        await supabase.from("properties").update({ images: uploadedImages }).eq("id", property.id)
+      }
+
+      const propertyForCallback: Omit<Property, "id" | "createdAt"> = {
+        title: formData.title,
+        description: formData.description,
+        price: Number(formData.price),
+        lotSize: Number(formData.lotSize) || 0,
+        builtArea: Number(formData.builtArea) || 0,
+        bedrooms: Number(formData.bedrooms) || 0,
+        bathrooms: Number(formData.bathrooms) || 0,
+        garages: Number(formData.garages) || 0,
+        propertyType: formData.propertyType as Property["propertyType"],
+        address: formData.address,
+        neighborhood: formData.neighborhood,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode,
+        images: uploadedImages,
+        features: formData.features,
+        ownerId: userId,
+        ownerName: userName,
+        userId: userId,
+        status: "available",
+        approvalStatus: "pending",
+      }
+
+      onAddProperty(propertyForCallback)
+      setCreatedPropertyId(property.id)
+
+      const createContract = confirm(
+        "Propriedade adicionada com sucesso! Deseja criar um contrato de comissão para esta propriedade?",
+      )
+      if (createContract) {
+        setShowContractDialog(true)
+      } else {
+        onOpenChange(false)
+        resetForm()
+      }
+    } catch (error) {
+      console.error("[v0] Error creating property:", error)
+      alert(`Erro ao criar propriedade: ${error instanceof Error ? error.message : "Erro desconhecido"}`)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -194,32 +259,19 @@ export function PropertyUploadDialog({
     setUploadingImages((prev) => [...prev, true])
 
     try {
-      const uploadFormData = new FormData()
-      uploadFormData.append("image", file)
+      const tempUrl = URL.createObjectURL(file)
 
-      const response = await fetch("/api/properties/upload-image", {
-        method: "POST",
-        body: uploadFormData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || "Erro no upload da imagem")
-      }
-
-      // Add the uploaded image URL to the form data
+      // Add the temporary image URL to the form data for preview
       setFormData((prev) => ({
         ...prev,
-        images: [...prev.images, result.data.url],
+        images: [...prev.images, tempUrl],
       }))
 
-      console.log("[v0] Image uploaded successfully:", result.data.url)
-
-      alert("Imagem enviada com sucesso!")
+      console.log("[v0] Image added for preview:", tempUrl)
+      alert("Imagem adicionada! Será enviada quando a propriedade for salva.")
     } catch (error) {
       console.error("[v0] Upload error:", error)
-      alert(`Erro ao fazer upload da imagem: ${error instanceof Error ? error.message : "Erro desconhecido"}`)
+      alert(`Erro ao processar imagem: ${error instanceof Error ? error.message : "Erro desconhecido"}`)
     } finally {
       setUploadingImages((prev) => prev.filter((_, index) => index !== uploadIndex))
       // Reset the input

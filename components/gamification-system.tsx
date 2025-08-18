@@ -16,6 +16,28 @@ interface Client {
   user_id: string
 }
 
+interface Property {
+  id: string
+  title: string
+  status: string
+  created_at: string
+  agency_id: string
+}
+
+interface Proposal {
+  id: string
+  property_id: string
+  status: string
+  created_at: string
+}
+
+interface Contract {
+  id: string
+  property_id: string
+  status: string
+  created_at: string
+}
+
 interface GameStats {
   totalPoints: number
   level: number
@@ -74,28 +96,27 @@ function GamificationSystem({ userId }: { userId: string }) {
     weeklyGoals: [],
     achievements: [],
   })
-  const [clients, setClients] = useState<Client[]>([])
+  const [properties, setProperties] = useState<Property[]>([])
+  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadGameStats()
-    loadClients()
+    loadData()
   }, [userId])
 
   useEffect(() => {
-    if (clients.length > 0) {
-      updateGameStats(clients)
+    if (properties.length > 0 || proposals.length > 0 || contracts.length > 0) {
+      updateGameStats()
     }
-  }, [clients])
+  }, [properties, proposals, contracts])
 
   const loadGameStats = async () => {
     try {
-      const { data, error } = await supabase.from("user_game_stats").select("*").eq("user_id", userId).single()
-
-      if (error && error.code !== "PGRST116") throw error
-
-      if (data) {
-        setGameStats(data.stats)
+      const savedStats = localStorage.getItem(`gameStats_${userId}`)
+      if (savedStats) {
+        setGameStats(JSON.parse(savedStats))
       } else {
         initializeGameStats()
       }
@@ -107,17 +128,32 @@ function GamificationSystem({ userId }: { userId: string }) {
     }
   }
 
-  const loadClients = async () => {
+  const loadData = async () => {
     try {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, full_name, status, created_at, user_id")
+      const { data: userProfile } = await supabase
+        .from("user_profiles")
+        .select("agency_id")
         .eq("user_id", userId)
+        .single()
 
-      if (error) throw error
-      setClients(data || [])
+      if (userProfile?.agency_id) {
+        const { data: propertiesData } = await supabase
+          .from("properties")
+          .select("id, title, status, created_at, agency_id")
+          .eq("agency_id", userProfile.agency_id)
+
+        setProperties(propertiesData || [])
+
+        const { data: proposalsData } = await supabase.from("proposals").select("id, property_id, status, created_at")
+
+        setProposals(proposalsData || [])
+
+        const { data: contractsData } = await supabase.from("contracts").select("id, property_id, status, created_at")
+
+        setContracts(contractsData || [])
+      }
     } catch (error) {
-      console.error("[v0] Error loading clients:", error)
+      console.error("[v0] Error loading data:", error)
     }
   }
 
@@ -184,58 +220,55 @@ function GamificationSystem({ userId }: { userId: string }) {
 
   const saveGameStats = async (stats: GameStats) => {
     try {
-      const { error } = await supabase.from("user_game_stats").upsert({
-        user_id: userId,
-        stats: stats,
-      })
-
-      if (error) throw error
+      localStorage.setItem(`gameStats_${userId}`, JSON.stringify(stats))
     } catch (error) {
       console.error("[v0] Error saving game stats:", error)
     }
   }
 
-  const updateGameStats = async (clientsData: Client[]) => {
+  const updateGameStats = async () => {
     const today = new Date().toISOString().split("T")[0]
 
-    // Calculate current progress
-    const todayNewClients = clientsData.filter((c) => c.created_at.startsWith(today)).length
-    const interestedClients = clientsData.filter((c) => c.status === "interested").length
-    const closedClients = clientsData.filter((c) => c.status === "closed").length
+    const todayProperties = properties.filter((p) => p.created_at.startsWith(today)).length
+    const activeProposals = proposals.filter((p) => p.status === "pending").length
+    const closedContracts = contracts.filter((c) => c.status === "signed").length
 
-    // Update daily goals
     const updatedDailyGoals = gameStats.dailyGoals.map((goal) => {
       switch (goal.id) {
         case "daily-new-client":
-          return { ...goal, current: todayNewClients, completed: todayNewClients >= goal.target }
+          return { ...goal, current: todayProperties, completed: todayProperties >= goal.target }
+        case "daily-contacts":
+          return { ...goal, current: Math.min(activeProposals, goal.target), completed: activeProposals >= goal.target }
+        case "daily-followups":
+          return {
+            ...goal,
+            current: Math.min(proposals.length, goal.target),
+            completed: proposals.length >= goal.target,
+          }
         default:
           return goal
       }
     })
 
-    // Update weekly goals
     const updatedWeeklyGoals = gameStats.weeklyGoals.map((goal) => {
       switch (goal.id) {
         case "weekly-conversions":
-          return { ...goal, current: closedClients, completed: closedClients >= goal.target }
+          return { ...goal, current: closedContracts, completed: closedContracts >= goal.target }
         case "weekly-hot-clients":
-          return { ...goal, current: interestedClients, completed: interestedClients >= goal.target }
+          return { ...goal, current: activeProposals, completed: activeProposals >= goal.target }
         default:
           return goal
       }
     })
 
-    // Calculate total points
     const completedDailyPoints = updatedDailyGoals.filter((g) => g.completed).reduce((sum, g) => sum + g.points, 0)
     const completedWeeklyPoints = updatedWeeklyGoals.filter((g) => g.completed).reduce((sum, g) => sum + g.points, 0)
-    const totalPoints = completedDailyPoints + completedWeeklyPoints + clientsData.length * 10
+    const totalPoints = completedDailyPoints + completedWeeklyPoints + properties.length * 10 + contracts.length * 50
 
-    // Calculate level
     const level = Math.floor(totalPoints / 1000) + 1
 
-    // Check for new badges and achievements
-    const newBadges = checkForNewBadges(clientsData, gameStats.badges)
-    const newAchievements = checkForNewAchievements(clientsData, gameStats.achievements)
+    const newBadges = checkForNewBadges(gameStats.badges)
+    const newAchievements = checkForNewAchievements(gameStats.achievements)
 
     const updatedStats: GameStats = {
       ...gameStats,
@@ -251,54 +284,37 @@ function GamificationSystem({ userId }: { userId: string }) {
     saveGameStats(updatedStats)
   }
 
-  const checkForNewBadges = (clientsData: Client[], currentBadges: BadgeInterface[]): BadgeInterface[] => {
+  const checkForNewBadges = (currentBadges: BadgeInterface[]): BadgeInterface[] => {
     const newBadges: BadgeInterface[] = []
     const badgeIds = currentBadges.map((b) => b.id)
 
-    // First Client Badge
-    if (clientsData.length >= 1 && !badgeIds.includes("first-client")) {
+    if (properties.length >= 1 && !badgeIds.includes("first-property")) {
       newBadges.push({
-        id: "first-client",
-        name: "Primeiro Cliente",
-        description: "Adicionou seu primeiro cliente",
+        id: "first-property",
+        name: "Primeira Propriedade",
+        description: "Cadastrou sua primeira propriedade",
         icon: "users",
         unlockedAt: new Date().toISOString(),
         rarity: "common",
       })
     }
 
-    // Client Collector Badge
-    if (clientsData.length >= 10 && !badgeIds.includes("client-collector")) {
+    if (properties.length >= 10 && !badgeIds.includes("property-collector")) {
       newBadges.push({
-        id: "client-collector",
-        name: "Colecionador de Clientes",
-        description: "Cadastrou 10 clientes",
+        id: "property-collector",
+        name: "Colecionador de Imóveis",
+        description: "Cadastrou 10 propriedades",
         icon: "trophy",
         unlockedAt: new Date().toISOString(),
         rarity: "rare",
       })
     }
 
-    // Interested Streak Badge
-    const interestedClients = clientsData.filter((c) => c.status === "interested")
-    if (interestedClients.length >= 5 && !badgeIds.includes("interested-streak")) {
+    if (contracts.length >= 3 && !badgeIds.includes("deal-closer")) {
       newBadges.push({
-        id: "interested-streak",
-        name: "Sequência de Interessados",
-        description: "5 clientes interessados simultâneos",
-        icon: "flame",
-        unlockedAt: new Date().toISOString(),
-        rarity: "epic",
-      })
-    }
-
-    // Closer Badge
-    const closedClients = clientsData.filter((c) => c.status === "closed")
-    if (closedClients.length >= 3 && !badgeIds.includes("closer")) {
-      newBadges.push({
-        id: "closer",
-        name: "Fechador",
-        description: "Fechou 3 negócios",
+        id: "deal-closer",
+        name: "Fechador de Negócios",
+        description: "Fechou 3 contratos",
         icon: "award",
         unlockedAt: new Date().toISOString(),
         rarity: "legendary",
@@ -308,18 +324,29 @@ function GamificationSystem({ userId }: { userId: string }) {
     return newBadges
   }
 
-  const checkForNewAchievements = (clientsData: Client[], currentAchievements: Achievement[]): Achievement[] => {
+  const checkForNewAchievements = (currentAchievements: Achievement[]): Achievement[] => {
     const newAchievements: Achievement[] = []
     const achievementIds = currentAchievements.map((a) => a.id)
 
-    if (clientsData.length >= 5 && !achievementIds.includes("growing-network")) {
+    if (properties.length >= 5 && !achievementIds.includes("growing-portfolio")) {
       newAchievements.push({
-        id: "growing-network",
-        name: "Rede em Crescimento",
-        description: "Cadastrou 5 clientes",
+        id: "growing-portfolio",
+        name: "Portfólio em Crescimento",
+        description: "Cadastrou 5 propriedades",
         points: 200,
         unlockedAt: new Date().toISOString(),
         category: "clients",
+      })
+    }
+
+    if (contracts.length >= 1 && !achievementIds.includes("first-sale")) {
+      newAchievements.push({
+        id: "first-sale",
+        name: "Primeira Venda",
+        description: "Fechou seu primeiro contrato",
+        points: 500,
+        unlockedAt: new Date().toISOString(),
+        category: "conversions",
       })
     }
 
@@ -361,7 +388,6 @@ function GamificationSystem({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Player Stats Header */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -389,7 +415,6 @@ function GamificationSystem({ userId }: { userId: string }) {
             </div>
           </div>
 
-          {/* Level Progress */}
           <div className="mt-4">
             <div className="flex justify-between text-sm mb-2">
               <span>Progresso para Nível {gameStats.level + 1}</span>
@@ -409,7 +434,6 @@ function GamificationSystem({ userId }: { userId: string }) {
 
         <TabsContent value="goals">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Daily Goals */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -439,7 +463,6 @@ function GamificationSystem({ userId }: { userId: string }) {
               </CardContent>
             </Card>
 
-            {/* Weekly Goals */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
