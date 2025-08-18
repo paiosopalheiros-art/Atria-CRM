@@ -4,7 +4,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   Users,
-  FileText,
   TrendingUp,
   Shield,
   CheckCircle,
@@ -13,6 +12,11 @@ import {
   BarChart3,
   Handshake,
   Globe,
+  Zap,
+  Crown,
+  Trophy,
+  Rocket,
+  Flame,
 } from "lucide-react"
 
 interface HomePageProps {
@@ -109,6 +113,42 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
               </CardContent>
             </Card>
 
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow bg-gradient-to-br from-orange-50 to-red-50">
+              <CardContent className="p-8">
+                <div className="bg-gradient-to-r from-orange-500 to-red-500 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
+                  <Rocket className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 mb-3">Sistema de Boost</h3>
+                <p className="text-slate-600">
+                  Destaque seus imóveis no topo do feed com boost básico, premium ou super. Mais visibilidade = mais
+                  vendas.
+                </p>
+                <div className="mt-4 flex items-center space-x-2">
+                  <Badge className="bg-orange-100 text-orange-700">Básico 2x</Badge>
+                  <Badge className="bg-purple-100 text-purple-700">Premium 5x</Badge>
+                  <Badge className="bg-red-100 text-red-700">Super 10x</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow bg-gradient-to-br from-purple-50 to-blue-50">
+              <CardContent className="p-8">
+                <div className="bg-gradient-to-r from-purple-500 to-blue-500 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
+                  <Trophy className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 mb-3">Ranking Gamificado</h3>
+                <p className="text-slate-600">
+                  Sistema de níveis, pontuação e ranking competitivo. Ganhe XP por vendas, captações e conquiste badges
+                  especiais.
+                </p>
+                <div className="mt-4 flex items-center space-x-2">
+                  <Badge className="bg-green-100 text-green-700">Novato</Badge>
+                  <Badge className="bg-blue-100 text-blue-700">Expert</Badge>
+                  <Badge className="bg-purple-100 text-purple-700">Master</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
                 <div className="bg-green-100 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
@@ -128,7 +168,8 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                 </div>
                 <h3 className="text-xl font-semibold text-slate-900 mb-3">Comissão Automática</h3>
                 <p className="text-slate-600">
-                  Sistema que aplica regras pré-definidas sobre a comissão de 5%. Transparente e sem conflitos.
+                  Sistema que aplica regras pré-definidas: 20% plataforma, 30% captador, 50% vendedor. Transparente e
+                  sem conflitos.
                 </p>
               </CardContent>
             </Card>
@@ -144,30 +185,251 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                 </p>
               </CardContent>
             </Card>
+          </div>
+        </div>
+      </section>
 
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+      <section className="py-20 bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">Planos que crescem com seu negócio</h2>
+            <p className="text-xl text-slate-600 max-w-3xl mx-auto">
+              Escolha o plano ideal para seu perfil profissional
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Free Plan */}
+            <Card className="border-2 border-slate-200 hover:border-blue-300 transition-colors">
               <CardContent className="p-8">
-                <div className="bg-red-100 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
-                  <FileText className="h-6 w-6 text-red-600" />
+                <div className="text-center mb-6">
+                  <div className="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Users className="h-8 w-8 text-slate-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900">Free</h3>
+                  <p className="text-slate-600">Para começar</p>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold text-slate-900">R$ 0</span>
+                    <span className="text-slate-600">/mês</span>
+                  </div>
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900 mb-3">Contratos Digitais</h3>
-                <p className="text-slate-600">
-                  Geração automática de contratos entre as partes, com acompanhamento em tempo real pelo administrador.
-                </p>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Até 5 propriedades</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">10 leads por mês</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Suporte básico</span>
+                  </li>
+                </ul>
+                <Button className="w-full bg-transparent" variant="outline">
+                  Começar Grátis
+                </Button>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+            {/* Pro Plan */}
+            <Card className="border-2 border-blue-500 hover:border-blue-600 transition-colors relative">
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <Badge className="bg-blue-500 text-white px-4 py-1">Mais Popular</Badge>
+              </div>
               <CardContent className="p-8">
-                <div className="bg-teal-100 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
-                  <Shield className="h-6 w-6 text-teal-600" />
+                <div className="text-center mb-6">
+                  <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Zap className="h-8 w-8 text-blue-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900">Pro</h3>
+                  <p className="text-slate-600">Para profissionais</p>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold text-slate-900">R$ 97</span>
+                    <span className="text-slate-600">/mês</span>
+                  </div>
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900 mb-3">Segurança Total</h3>
-                <p className="text-slate-600">
-                  Todos os dados são protegidos e auditáveis, garantindo transparência em cada transação.
-                </p>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Até 50 propriedades</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">100 leads por mês</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Sistema de boost</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Relatórios avançados</span>
+                  </li>
+                </ul>
+                <Button className="w-full bg-blue-600 hover:bg-blue-700">Escolher Pro</Button>
               </CardContent>
             </Card>
+
+            {/* Elite Plan */}
+            <Card className="border-2 border-purple-500 hover:border-purple-600 transition-colors">
+              <CardContent className="p-8">
+                <div className="text-center mb-6">
+                  <div className="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Crown className="h-8 w-8 text-purple-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900">Elite</h3>
+                  <p className="text-slate-600">Para equipes</p>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold text-slate-900">R$ 197</span>
+                    <span className="text-slate-600">/mês</span>
+                  </div>
+                </div>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Propriedades ilimitadas</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Leads ilimitados</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Boost premium</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                    <span className="text-slate-600">Suporte prioritário</span>
+                  </li>
+                </ul>
+                <Button className="w-full bg-purple-600 hover:bg-purple-700">Escolher Elite</Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">
+              Sistema de Boost: Destaque seus imóveis
+            </h2>
+            <p className="text-xl text-slate-600 max-w-3xl mx-auto">
+              Aumente a visibilidade dos seus imóveis com nosso sistema de boost inteligente
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-12 items-center mb-16">
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-6">Como funciona o Boost</h3>
+              <div className="space-y-6">
+                <div className="flex items-start space-x-4">
+                  <div className="bg-orange-100 p-3 rounded-lg">
+                    <Flame className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-900 mb-2">Boost Básico (2x)</h4>
+                    <p className="text-slate-600">
+                      Multiplica por 2 a visibilidade do imóvel por 7 dias. Ideal para propriedades novas.
+                    </p>
+                    <Badge className="mt-2 bg-orange-100 text-orange-700">R$ 29,90</Badge>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-4">
+                  <div className="bg-purple-100 p-3 rounded-lg">
+                    <Zap className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-900 mb-2">Boost Premium (5x)</h4>
+                    <p className="text-slate-600">
+                      Multiplica por 5 a visibilidade por 14 dias. Para imóveis estratégicos.
+                    </p>
+                    <Badge className="mt-2 bg-purple-100 text-purple-700">R$ 69,90</Badge>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-4">
+                  <div className="bg-red-100 p-3 rounded-lg">
+                    <Rocket className="h-6 w-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-900 mb-2">Boost Super (10x)</h4>
+                    <p className="text-slate-600">
+                      Multiplica por 10 a visibilidade por 30 dias. Máxima exposição garantida.
+                    </p>
+                    <Badge className="mt-2 bg-red-100 text-red-700">R$ 129,90</Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-8 rounded-2xl">
+              <h4 className="font-semibold text-slate-900 mb-4 text-center">Mockup: Feed com Boost</h4>
+              <div className="space-y-4">
+                {/* Super Boost Property */}
+                <div className="bg-gradient-to-r from-red-500 to-pink-500 p-4 rounded-lg text-white relative">
+                  <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                    <Rocket className="h-3 w-3 mr-1" />
+                    SUPER 10x
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-16 h-16 bg-white/20 rounded-lg"></div>
+                    <div>
+                      <h5 className="font-semibold">Casa Luxuosa - R$ 850.000</h5>
+                      <p className="text-sm opacity-90">3 quartos • 2 banheiros • 150m²</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Premium Boost Property */}
+                <div className="bg-gradient-to-r from-purple-500 to-blue-500 p-4 rounded-lg text-white relative">
+                  <div className="absolute -top-2 -right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                    <Zap className="h-3 w-3 mr-1" />
+                    PREMIUM 5x
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-16 h-16 bg-white/20 rounded-lg"></div>
+                    <div>
+                      <h5 className="font-semibold">Apartamento Central - R$ 420.000</h5>
+                      <p className="text-sm opacity-90">2 quartos • 1 banheiro • 80m²</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Basic Boost Property */}
+                <div className="bg-gradient-to-r from-orange-500 to-yellow-500 p-4 rounded-lg text-white relative">
+                  <div className="absolute -top-2 -right-2 bg-orange-600 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                    <Flame className="h-3 w-3 mr-1" />
+                    BÁSICO 2x
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-16 h-16 bg-white/20 rounded-lg"></div>
+                    <div>
+                      <h5 className="font-semibold">Casa Familiar - R$ 320.000</h5>
+                      <p className="text-sm opacity-90">3 quartos • 1 banheiro • 120m²</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Regular Property */}
+                <div className="bg-slate-200 p-4 rounded-lg text-slate-700">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-16 h-16 bg-slate-300 rounded-lg"></div>
+                    <div>
+                      <h5 className="font-semibold">Apartamento Compacto - R$ 180.000</h5>
+                      <p className="text-sm opacity-75">1 quarto • 1 banheiro • 45m²</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p className="text-center text-slate-600 text-sm mt-4">
+                Imóveis com boost aparecem primeiro e com destaque visual
+              </p>
+            </div>
           </div>
         </div>
       </section>

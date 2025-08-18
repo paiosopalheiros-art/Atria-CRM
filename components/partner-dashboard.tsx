@@ -85,7 +85,7 @@ interface PropertyStatusUpdate {
   buyerInfo?: string
 }
 
-export function PartnerDashboard({ user, onLogout }: PartnerDashboardProps) {
+function PartnerDashboard({ user, onLogout }: PartnerDashboardProps) {
   const [properties, setProperties] = useState<Property[]>([])
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
@@ -1124,3 +1124,6 @@ export function PartnerDashboard({ user, onLogout }: PartnerDashboardProps) {
     </div>
   )
 }
+
+export { PartnerDashboard }
+export default PartnerDashboard
