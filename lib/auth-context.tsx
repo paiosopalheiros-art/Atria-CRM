@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { createClient } from "./supabase/client"
-import { v4 as uuidv4 } from "uuid"
 
 interface User {
   id: string
@@ -75,6 +74,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error("[v0] Login error:", error.message)
+
+        if (error.message === "Invalid login credentials") {
+          console.log("[v0] Attempting auto-registration for existing user:", email)
+
+          try {
+            const response = await fetch("/api/auth/auto-register", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, password }),
+            })
+
+            if (response.ok) {
+              console.log("[v0] Auto-registration successful, retrying login")
+              // Retry login after successful auto-registration
+              const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+              })
+
+              if (retryError) {
+                throw new Error(retryError.message)
+              }
+
+              console.log("[v0] Login successful after auto-registration:", retryData.user?.email)
+              return
+            } else {
+              const errorData = await response.json()
+              console.log("[v0] Auto-registration failed:", errorData.error)
+            }
+          } catch (autoRegError) {
+            console.error("[v0] Auto-registration error:", autoRegError)
+          }
+        }
+
         throw new Error(error.message)
       }
 
@@ -128,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (existingAgency && !agencyError) {
             defaultAgencyId = existingAgency.id
+            console.log("[v0] Using existing default agency:", defaultAgencyId)
           } else {
             // Create default agency if it doesn't exist
             const { data: newAgency, error: createError } = await supabase
@@ -143,16 +177,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (createError || !newAgency) {
               console.error("[v0] Failed to create default agency:", createError)
-              // Use a valid UUID as fallback
-              defaultAgencyId = uuidv4()
-            } else {
-              defaultAgencyId = newAgency.id
+              throw new Error("Falha ao criar agência padrão")
             }
+
+            defaultAgencyId = newAgency.id
+            console.log("[v0] Created new default agency:", defaultAgencyId)
           }
         } catch (agencyError) {
           console.error("[v0] Agency setup error:", agencyError)
-          // Use a valid UUID as fallback
-          defaultAgencyId = uuidv4()
+          throw new Error("Falha ao configurar agência")
         }
 
         const { error: profileError } = await supabase.from("user_profiles").insert({
@@ -162,16 +195,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user_type: userType,
           phone: userData.phone || null,
           creci: userData.creci || null,
-          agency_id: defaultAgencyId, // Use valid UUID instead of "default-agency"
+          agency_id: defaultAgencyId, // Always use valid agency ID
           invite_code: userData.inviteCode,
           is_active: true,
         })
 
         if (profileError) {
           console.error("[v0] Profile creation error:", profileError)
-          // Don't throw error if profile creation fails, user can still login
-          console.log("[v0] User created without extended profile")
+          throw new Error("Falha ao criar perfil do usuário")
         }
+
+        console.log("[v0] User profile created with agency:", defaultAgencyId)
       }
 
       console.log("[v0] Registration successful:", data.user?.email)

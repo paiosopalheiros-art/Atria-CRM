@@ -50,6 +50,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     Array<{ id: string; message: string; type: "info" | "warning" | "success"; timestamp: string }>
   >([])
   const [loading, setLoading] = useState(false)
+  const [publications, setPublications] = useState<any[]>([])
   // const supabase = useSupabaseClient()
 
   useEffect(() => {
@@ -60,6 +61,24 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const loadDataFromSupabase = async () => {
     try {
       console.log("[v0] Loading all data from Supabase...")
+
+      const { data: publicationsData, error: publicationsError } = await supabase
+        .from("publications")
+        .select("*")
+        .eq("listing_type", "sale") // Only show sale properties
+        .order("created_at", { ascending: false })
+
+      if (publicationsError) {
+        console.error("[v0] Error loading publications:", publicationsError)
+      } else {
+        console.log("[v0] Loaded publications:", publicationsData?.length || 0)
+        // Mark ATS properties as auto-approved in the UI
+        const formattedPublications = (publicationsData || []).map((pub) => ({
+          ...pub,
+          auto_approved: pub.source === "creci", // ATS properties are auto-approved
+        }))
+        setPublications(formattedPublications)
+      }
 
       // Load properties
       const { data: propertiesData, error: propertiesError } = await supabase
@@ -86,20 +105,27 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         setProperties(formattedProperties)
       }
 
-      // Load proposals
       const { data: proposalsData, error: proposalsError } = await supabase
         .from("proposals")
-        .select("*, properties(title)")
+        .select("*")
         .order("created_at", { ascending: false })
 
       if (proposalsError) {
         console.error("[v0] Error loading proposals:", proposalsError)
       } else {
+        // Create a map of property IDs to titles for quick lookup
+        const propertyTitleMap = new Map()
+        if (propertiesData) {
+          propertiesData.forEach((prop) => {
+            propertyTitleMap.set(prop.id, prop.title)
+          })
+        }
+
         const formattedProposals =
           proposalsData?.map((proposal) => ({
             id: proposal.id,
             propertyId: proposal.property_id,
-            propertyTitle: proposal.properties?.title || "Propriedade",
+            propertyTitle: propertyTitleMap.get(proposal.property_id) || "Propriedade",
             clientName: proposal.client_name,
             clientEmail: proposal.client_email,
             clientPhone: proposal.client_phone,
@@ -753,7 +779,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                             </div>
                             <div className="flex items-center gap-2 text-gray-600 mb-2">
                               <MapPin className="h-4 w-4" />
-                              <span>{property.address}</span>
+                              <span>{property.location}</span>
                             </div>
                             <p className="text-sm text-gray-500">
                               Publicado por:{" "}
@@ -767,40 +793,49 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                               R$ {property.price.toLocaleString("pt-BR")}
                             </div>
                             <p className="text-sm text-gray-500">
-                              {property.propertyType === "house" ? "Casa" : "Apartamento"}
+                              {property.type === "house" ? "Casa" : "Apartamento"}
                             </p>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Bed className="h-4 w-4 text-gray-600" />
-                              <span className="text-sm font-medium">Quartos</span>
+                          {/* Assuming these properties exist on your Property type */}
+                          {property.bedrooms && (
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Bed className="h-4 w-4 text-gray-600" />
+                                <span className="text-sm font-medium">Quartos</span>
+                              </div>
+                              <p className="text-lg font-semibold">{property.bedrooms}</p>
                             </div>
-                            <p className="text-lg font-semibold">{property.bedrooms}</p>
-                          </div>
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Bath className="h-4 w-4 text-gray-600" />
-                              <span className="text-sm font-medium">Banheiros</span>
+                          )}
+                          {property.bathrooms && (
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Bath className="h-4 w-4 text-gray-600" />
+                                <span className="text-sm font-medium">Banheiros</span>
+                              </div>
+                              <p className="text-lg font-semibold">{property.bathrooms}</p>
                             </div>
-                            <p className="text-lg font-semibold">{property.bathrooms}</p>
-                          </div>
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Car className="h-4 w-4 text-gray-600" />
-                              <span className="text-sm font-medium">Vagas</span>
+                          )}
+                          {property.garages && (
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Car className="h-4 w-4 text-gray-600" />
+                                <span className="text-sm font-medium">Vagas</span>
+                              </div>
+                              <p className="text-lg font-semibold">{property.garages}</p>
                             </div>
-                            <p className="text-lg font-semibold">{property.garages}</p>
-                          </div>
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Ruler className="h-4 w-4 text-gray-600" />
-                              <span className="text-sm font-medium">Área</span>
+                          )}
+                          {property.builtArea && (
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Ruler className="h-4 w-4 text-gray-600" />
+                                <span className="text-sm font-medium">Área</span>
+                              </div>
+                              <p className="text-lg font-semibold">{property.builtArea}m²</p>
                             </div>
-                            <p className="text-lg font-semibold">{property.builtArea}m²</p>
-                          </div>
+                          )}
                         </div>
 
                         {property.images && property.images.length > 0 && (
@@ -865,7 +900,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h3 className="font-semibold">{property.title}</h3>
-                          <p className="text-sm text-muted-foreground">{property.address}</p>
+                          <p className="text-sm text-muted-foreground">{property.location}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge

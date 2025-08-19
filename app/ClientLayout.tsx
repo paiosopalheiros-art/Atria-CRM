@@ -17,19 +17,32 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode
 }) {
-  // <CHANGE> Added global error handler to silence MetaMask connection errors
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      if (event.reason && typeof event.reason === "string" && event.reason.includes("MetaMask")) {
-        console.log("[v0] Silencing MetaMask error (not relevant for this CRM):", event.reason)
+      const reason = event.reason
+      const reasonString = typeof reason === "string" ? reason : reason?.message || String(reason)
+
+      if (
+        reasonString &&
+        (reasonString.includes("MetaMask") ||
+          reasonString.includes("Failed to connect to MetaMask") ||
+          reasonString.includes("ethereum") ||
+          reasonString.includes("web3"))
+      ) {
+        console.log("[v0] Silencing MetaMask/Web3 error (not relevant for this CRM):", reasonString)
         event.preventDefault()
+        return
       }
     }
 
     const handleError = (event: ErrorEvent) => {
-      if (event.message && event.message.includes("MetaMask")) {
-        console.log("[v0] Silencing MetaMask error (not relevant for this CRM):", event.message)
+      if (
+        event.message &&
+        (event.message.includes("MetaMask") || event.message.includes("ethereum") || event.message.includes("web3"))
+      ) {
+        console.log("[v0] Silencing MetaMask/Web3 error (not relevant for this CRM):", event.message)
         event.preventDefault()
+        return
       }
     }
 

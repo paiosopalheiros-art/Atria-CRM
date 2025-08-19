@@ -1,19 +1,29 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { LoginForm } from "@/components/login-form"
 import { AdminDashboard } from "@/components/admin-dashboard"
 import { PartnerDashboard } from "@/components/partner-dashboard"
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import HomePage from "@/app/home/page"
+import HouseLoader from "@/components/HouseLoader"
 
-interface UserProfile {
+export interface UserProfile {
   id: string
   email: string
   full_name: string
   user_type?: "admin" | "partner"
   is_active?: boolean
+}
+
+export interface LegacyUser {
+  id: string
+  email: string
+  name: string
+  userType: "admin" | "partner"
+  isActive: boolean
 }
 
 export default function AtriaApp() {
@@ -22,6 +32,7 @@ export default function AtriaApp() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
   const supabase = createClient()
+  const router = useRouter()
 
   useEffect(() => {
     if (user && !userProfile) {
@@ -37,11 +48,14 @@ export default function AtriaApp() {
       console.log("[v0] Loading user profile for:", user.email)
 
       try {
+        console.log("[v0] Querying user_profiles table for user_id:", user.id)
         const { data, error } = await supabase
           .from("user_profiles")
           .select("id, user_id, full_name, email, user_type, agency_id, is_active")
           .eq("user_id", user.id)
           .single()
+
+        console.log("[v0] Database query result:", { data, error })
 
         if (data && !error) {
           console.log("[v0] User profile loaded from database:", data)
@@ -54,12 +68,18 @@ export default function AtriaApp() {
           })
           return
         }
+
+        if (error) {
+          console.log("[v0] Database error:", error)
+        }
       } catch (dbError) {
         console.log("[v0] User profile not found, using auth data:", dbError)
       }
 
       console.log("[v0] Using auth user data as fallback")
-      const userType = getUserTypeFromEmail(user.email)
+      const userType = user.email === "paiosopalheiros@gmail.com" ? "admin" : getUserTypeFromEmail(user.email)
+      console.log("[v0] Determined user type:", userType, "for email:", user.email)
+
       setUserProfile({
         id: user.id,
         email: user.email,
@@ -69,7 +89,7 @@ export default function AtriaApp() {
       })
     } catch (error) {
       console.error("[v0] Error loading user profile:", error)
-      const userType = getUserTypeFromEmail(user.email)
+      const userType = user.email === "paiosopalheiros@gmail.com" ? "admin" : getUserTypeFromEmail(user.email)
       setUserProfile({
         id: user.id,
         email: user.email,
@@ -129,7 +149,7 @@ export default function AtriaApp() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-8">
           <div className="relative">
-            <div className="animate-spin rounded-full h-20 w-20 border-4 border-border border-t-primary mx-auto"></div>
+            <HouseLoader className="w-20 h-20 text-primary mx-auto" />
           </div>
           <div className="space-y-3">
             <h2 className="text-3xl font-semibold text-foreground">Atria</h2>
@@ -146,7 +166,7 @@ export default function AtriaApp() {
   }
 
   if (user && userProfile) {
-    const legacyUser = {
+    const legacyUser: LegacyUser = {
       id: userProfile.id,
       email: userProfile.email,
       name: userProfile.full_name || userProfile.email.split("@")[0],

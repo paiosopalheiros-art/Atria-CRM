@@ -18,16 +18,23 @@ import {
   Rocket,
   Flame,
 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface HomePageProps {
   onShowLogin?: () => void
 }
 
 export default function HomePage({ onShowLogin }: HomePageProps) {
+  const router = useRouter()
+
   const handleAccessSystem = () => {
     if (onShowLogin) {
       onShowLogin()
     }
+  }
+
+  const handleCheckout = (plan: "free" | "pro" | "elite") => {
+    router.push(`/checkout/${plan}`)
   }
 
   return (
@@ -227,7 +234,7 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                     <span className="text-slate-600">Suporte básico</span>
                   </li>
                 </ul>
-                <Button className="w-full bg-transparent" variant="outline">
+                <Button className="w-full bg-transparent" variant="outline" onClick={() => handleCheckout("free")}>
                   Começar Grátis
                 </Button>
               </CardContent>
@@ -268,7 +275,9 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                     <span className="text-slate-600">Relatórios avançados</span>
                   </li>
                 </ul>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">Escolher Pro</Button>
+                <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => handleCheckout("pro")}>
+                  Escolher Pro
+                </Button>
               </CardContent>
             </Card>
 
@@ -304,7 +313,9 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                     <span className="text-slate-600">Suporte prioritário</span>
                   </li>
                 </ul>
-                <Button className="w-full bg-purple-600 hover:bg-purple-700">Escolher Elite</Button>
+                <Button className="w-full bg-purple-600 hover:bg-purple-700" onClick={() => handleCheckout("elite")}>
+                  Escolher Elite
+                </Button>
               </CardContent>
             </Card>
           </div>

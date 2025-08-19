@@ -30,6 +30,7 @@ import CommissionManager from "./commission-manager"
 import BrokerProfile from "./broker-profile"
 import RankingLeaderboard from "./ranking-leaderboard"
 import BoostManager from "./boost-manager"
+import ClientManagementEnhanced from "./client-management-enhanced"
 import type { User } from "@/app/page"
 import type { Proposal } from "./property-proposal-form"
 import { supabase } from "@/lib/supabase/client"
@@ -827,7 +828,7 @@ function PartnerDashboard({ user, onLogout }: PartnerDashboardProps) {
                   </div>
                   <div className="p-6">
                     <PropertyFeed
-                      properties={filteredProperties}
+                      properties={properties.filter((p) => p.approvalStatus === "approved")}
                       currentUserId={user.id}
                       onShareProperty={handleShareProperty}
                     />
@@ -850,44 +851,7 @@ function PartnerDashboard({ user, onLogout }: PartnerDashboardProps) {
               <TabsContent value="clients" className="space-y-6">
                 <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900">Gerenciar Clientes</h2>
-                    <p className="text-sm text-gray-600">Acompanhe propostas e interessados</p>
-                  </div>
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      {proposals.length > 0 ? (
-                        proposals.map((proposal) => (
-                          <div key={proposal.id} className="border rounded-lg p-4">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h3 className="font-semibold">{proposal.clientName}</h3>
-                                <p className="text-sm text-gray-600">{proposal.clientEmail}</p>
-                                <p className="text-sm text-gray-600">{proposal.clientPhone}</p>
-                              </div>
-                              <span
-                                className={`px-2 py-1 rounded text-xs ${
-                                  proposal.status === "pending"
-                                    ? "bg-yellow-100 text-yellow-800"
-                                    : proposal.status === "accepted"
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-red-100 text-red-800"
-                                }`}
-                              >
-                                {proposal.status}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-700 mt-2">{proposal.message}</p>
-                            <p className="text-sm font-medium mt-2">
-                              Proposta: R$ {proposal.proposedPrice?.toLocaleString()}
-                            </p>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-8 text-gray-500">
-                          <p>Nenhuma proposta de cliente ainda</p>
-                        </div>
-                      )}
-                    </div>
+                    <ClientManagementEnhanced currentUserId={user.id} />
                   </div>
                 </div>
               </TabsContent>

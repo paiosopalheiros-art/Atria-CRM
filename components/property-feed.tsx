@@ -94,9 +94,12 @@ export function PropertyFeed({
 
       let query = supabase.from("properties").select("*")
 
+      // Only admins can see pending/rejected properties for moderation purposes
+      // All other users (Free, Pro, Elite plans) see the same approved properties
       if (userType !== "admin") {
         query = query.eq("approval_status", "approved")
       }
+      // No filtering by user subscription plan - all approved properties visible to everyone
 
       if (!reset && lastCreatedAt) {
         query = query.lt("created_at", lastCreatedAt)

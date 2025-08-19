@@ -92,15 +92,12 @@ export function PropertyUploadDialog({
     try {
       const supabase = createClient()
 
+      // Get user profile for any additional data if needed
       const { data: userProfile } = await supabase
         .from("user_profiles")
         .select("agency_id")
         .eq("user_id", userId)
         .single()
-
-      if (!userProfile?.agency_id) {
-        throw new Error("Usuário não possui agência associada")
-      }
 
       const { data: property, error: propertyError } = await supabase
         .from("properties")
@@ -120,7 +117,7 @@ export function PropertyUploadDialog({
           state: formData.state,
           zip_code: formData.zipCode,
           features: formData.features,
-          agency_id: userProfile.agency_id,
+          agency_id: userProfile?.agency_id || null,
           status: "available",
         })
         .select()

@@ -13,41 +13,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Plus, User, Phone, Mail, MapPin, Calendar, Clock, Star, TrendingUp, Users } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
-
-export interface Client {
-  id: string
-  full_name: string
-  email: string
-  phone: string
-  cpf?: string
-  address?: string
-  city?: string
-  state?: string
-  zip_code?: string
-  budget?: string
-  property_type?: string
-  preferred_location?: string
-  notes?: string
-  status: "lead" | "interested" | "negotiating" | "closed" | "lost"
-  source?: string
-  created_at: string
-  user_id: string
-  last_contact?: string
-}
-
-export interface Visit {
-  id: string
-  client_id: string
-  property_id?: string
-  visit_date: string
-  visit_time: string
-  status: "scheduled" | "completed" | "cancelled" | "no-show"
-  notes?: string
-  rating?: number
-  feedback?: string
-  created_at: string
-  user_id: string
-}
+import type { Client, Visit } from "@/lib/types"
 
 interface ClientManagementProps {
   userId: string
