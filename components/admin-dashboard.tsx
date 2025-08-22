@@ -355,53 +355,15 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     }
   }
 
-  const handleApproveProperty = async (propertyId: string) => {
-    try {
-      const { error } = await supabase.from("properties").update({ status: "approved" }).eq("id", propertyId)
-
-      if (error) {
-        console.error("[v0] Error approving property:", error)
-        addNotification("Erro ao aprovar propriedade", "warning")
-        return
-      }
-
-      const property = properties.find((p) => p.id === propertyId)
-      const updatedProperties = properties.map((p) => (p.id === propertyId ? { ...p, status: "approved" as const } : p))
-      setProperties(updatedProperties)
-
-      await logActivity("Propriedade Aprovada", `Propriedade "${property?.title}" foi aprovada`)
-      await addNotification(`Propriedade "${property?.title}" foi aprovada com sucesso`, "success")
-    } catch (error) {
-      console.error("[v0] Error approving property:", error)
-      addNotification("Erro interno ao aprovar propriedade", "warning")
-    }
-  }
-
-  const handleRejectProperty = async (propertyId: string) => {
-    try {
-      const { error } = await supabase.from("properties").update({ status: "rejected" }).eq("id", propertyId)
-
-      if (error) {
-        console.error("[v0] Error rejecting property:", error)
-        addNotification("Erro ao rejeitar propriedade", "warning")
-        return
-      }
-
-      const property = properties.find((p) => p.id === propertyId)
-      const updatedProperties = properties.map((p) => (p.id === propertyId ? { ...p, status: "rejected" as const } : p))
-      setProperties(updatedProperties)
-
-      await logActivity("Propriedade Rejeitada", `Propriedade "${property?.title}" foi rejeitada`)
-      await addNotification(`Propriedade "${property?.title}" foi rejeitada`, "warning")
-    } catch (error) {
-      console.error("[v0] Error rejecting property:", error)
-      addNotification("Erro interno ao rejeitar propriedade", "warning")
-    }
-  }
-
   const handleDeleteProperty = async (propertyId: string) => {
     try {
       const property = properties.find((p) => p.id === propertyId)
+
+      if (
+        !confirm(`Tem certeza que deseja deletar a propriedade "${property?.title}"? Esta ação não pode ser desfeita.`)
+      ) {
+        return
+      }
 
       const { error } = await supabase.from("properties").delete().eq("id", propertyId)
 
@@ -428,7 +390,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       code,
       user_type: type,
       is_used: false,
-      created_by: user.id,
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
     }
 
     try {
@@ -742,18 +704,48 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900">Moderação de Propriedades</h2>
-                    <p className="text-sm text-gray-600">Aprove ou rejeite propriedades pendentes</p>
+                    <p className="text-sm text-gray-600">
+                      Todas as propriedades precisam ser aprovadas MANUALMENTE. Nenhuma aprovação é automática.
+                    </p>
                   </div>
-                  {pendingProperties.length > 0 && (
-                    <div className="flex items-center gap-2 bg-red-100 text-red-800 px-3 py-1 rounded-full">
-                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm font-medium">{pendingProperties.length} pendentes</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline" size="sm" onClick={() => loadDataFromSupabase()} disabled={loading}>
+                      {loading ? "Carregando..." : "Atualizar"}
+                    </Button>
+                    {pendingProperties.length > 0 && (
+                      <div className="flex items-center gap-2 bg-red-100 text-red-800 px-3 py-1 rounded-full">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium">{pendingProperties.length}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-yellow-800">{pendingProperties.length}</div>
+                    <div className="text-sm text-yellow-600">Aguardando Aprovação</div>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-green-800">
+                      {properties.filter((p) => p.status === "approved").length}
+                    </div>
+                    <div className="text-sm text-green-600">Aprovadas</div>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-red-800">
+                      {properties.filter((p) => p.status === "rejected").length}
+                    </div>
+                    <div className="text-sm text-red-600">Rejeitadas</div>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-blue-800">{properties.length}</div>
+                    <div className="text-sm text-blue-600">Total</div>
+                  </div>
+                </div>
+
                 <div className="space-y-6">
                   {pendingProperties.length === 0 ? (
                     <div className="text-center py-12">
@@ -761,7 +753,10 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                         <Building2 className="h-8 w-8 text-green-600" />
                       </div>
                       <h3 className="text-lg font-medium text-gray-900 mb-2">Tudo em dia!</h3>
-                      <p className="text-gray-500">Nenhuma propriedade pendente de aprovação</p>
+                      <p className="text-gray-500">Nenhuma propriedade pendente de aprovação manual</p>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Todas as propriedades são aprovadas manualmente por administradores
+                      </p>
                     </div>
                   ) : (
                     pendingProperties.map((property) => (
@@ -773,8 +768,8 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <h3 className="text-xl font-semibold text-gray-900">{property.title}</h3>
-                              <div className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
-                                Aguardando Aprovação
+                              <div className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold border border-yellow-300">
+                                🔍 AGUARDANDO APROVAÇÃO MANUAL
                               </div>
                             </div>
                             <div className="flex items-center gap-2 text-gray-600 mb-2">
@@ -786,6 +781,9 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                               <span className="font-medium">
                                 {users.find((u) => u.id === property.userId)?.fullName || "Usuário não encontrado"}
                               </span>
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Criado em: {new Date(property.createdAt).toLocaleString("pt-BR")}
                             </p>
                           </div>
                           <div className="text-right">
@@ -858,26 +856,14 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                           </div>
                         )}
 
-                        <div className="flex gap-3">
-                          <Button
-                            onClick={() => handleApproveProperty(property.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-6"
-                          >
-                            ✓ Aprovar
-                          </Button>
+                        <div className="flex gap-3 pt-4 border-t border-gray-100">
                           <Button
                             variant="destructive"
-                            onClick={() => handleRejectProperty(property.id)}
-                            className="px-6"
-                          >
-                            ✗ Rejeitar
-                          </Button>
-                          <Button
-                            variant="outline"
                             onClick={() => handleDeleteProperty(property.id)}
-                            className="border-red-200 text-red-600 hover:bg-red-50"
+                            className="px-8 py-2 font-semibold"
+                            size="lg"
                           >
-                            🗑 Deletar
+                            🗑 DELETAR PROPRIEDADE
                           </Button>
                         </div>
                       </div>

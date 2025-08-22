@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +20,7 @@ import {
   ExternalLink,
   TrendingUp,
   Clock,
+  Trash2,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 
@@ -42,7 +44,6 @@ interface Property {
   media?: { kind: "image" | "video"; url: string; width?: number; height?: number; alt?: string }[]
   features: string[]
   status: "available" | "reserved" | "sold"
-  approval_status: "pending" | "approved" | "rejected"
   owner_id: string
   owner_name: string
   created_at: string
@@ -56,12 +57,7 @@ interface PropertyFeedProps {
   onShareProperty?: (property: Property) => void
 }
 
-export function PropertyFeed({
-  currentUserId,
-  userType = "partner",
-  onEditProperty,
-  onShareProperty,
-}: PropertyFeedProps) {
+function PropertyFeed({ currentUserId, userType = "partner", onEditProperty, onShareProperty }: PropertyFeedProps) {
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -70,8 +66,8 @@ export function PropertyFeed({
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
-  const [filterApproval, setFilterApproval] = useState("all")
   const [sortMode, setSortMode] = useState<"recent" | "top">("recent")
+  const router = useRouter()
 
   const ITEMS_PER_PAGE = 12
 
@@ -90,16 +86,12 @@ export function PropertyFeed({
         setLoadingMore(true)
       }
 
-      console.log("[v0] Fetching properties for user type:", userType, "sort:", sortMode)
+      console.log("[v0] Fetching properties - reset:", reset, "userType:", userType, "sortMode:", sortMode)
+      console.log("[v0] Current user ID:", currentUserId)
 
       let query = supabase.from("properties").select("*")
 
-      // Only admins can see pending/rejected properties for moderation purposes
-      // All other users (Free, Pro, Elite plans) see the same approved properties
-      if (userType !== "admin") {
-        query = query.eq("approval_status", "approved")
-      }
-      // No filtering by user subscription plan - all approved properties visible to everyone
+      console.log("[v0] Building query - lastCreatedAt:", lastCreatedAt)
 
       if (!reset && lastCreatedAt) {
         query = query.lt("created_at", lastCreatedAt)
@@ -111,13 +103,26 @@ export function PropertyFeed({
         query = query.order("price", { ascending: false }).order("created_at", { ascending: false })
       }
 
+      console.log("[v0] Executing query with limit:", ITEMS_PER_PAGE)
       const { data, error } = await query.limit(ITEMS_PER_PAGE)
 
       if (error) {
-        console.error("[v0] Error fetching properties:", error)
+        console.error("[v0] Error fetching properties:", error.message, error.details)
         if (reset) setProperties([])
       } else {
-        console.log("[v0] Properties fetched:", data?.length || 0)
+        console.log("[v0] Properties fetched successfully:", data?.length || 0)
+        console.log(
+          "[v0] First property sample:",
+          data?.[0]
+            ? {
+                id: data[0].id,
+                title: data[0].title,
+                owner_id: data[0].owner_id,
+                created_at: data[0].created_at,
+              }
+            : "No properties",
+        )
+
         const newProperties = data || []
 
         if (reset) {
@@ -134,7 +139,7 @@ export function PropertyFeed({
         }
       }
     } catch (error) {
-      console.error("[v0] Error in fetchProperties:", error)
+      console.error("[v0] Exception in fetchProperties:", error)
       if (reset) setProperties([])
     } finally {
       setLoading(false)
@@ -160,22 +165,61 @@ export function PropertyFeed({
   }, [loadMore])
 
   const filteredProperties = properties.filter((property) => {
+    const title = property.title || ""
+    const neighborhood = property.neighborhood || ""
+    const city = property.city || ""
+
     const matchesSearch =
-      property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property.neighborhood.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property.city.toLowerCase().includes(searchTerm.toLowerCase())
+      title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      neighborhood.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      city.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesType = filterType === "all" || property.property_type === filterType
     const matchesStatus = filterStatus === "all" || property.status === filterStatus
-    const matchesApproval = filterApproval === "all" || property.approval_status === filterApproval
 
-    return matchesSearch && matchesType && matchesStatus && matchesApproval
+    return matchesSearch && matchesType && matchesStatus
   })
+
+  console.log("[v0] Filtered properties count:", filteredProperties.length, "of", properties.length)
+
+  const handleDeleteProperty = async (propertyId: string) => {
+    console.log("[v0] Attempting to delete property:", propertyId)
+
+    if (!propertyId) {
+      console.error("[v0] Cannot delete property: ID is missing")
+      alert("Erro: ID da propriedade não encontrado")
+      return
+    }
+
+    if (!confirm("Tem certeza que deseja deletar esta propriedade? Esta ação não pode ser desfeita.")) {
+      console.log("[v0] Property deletion cancelled by user")
+      return
+    }
+
+    try {
+      console.log("[v0] Executing delete query for property:", propertyId)
+      const { error } = await supabase.from("properties").delete().eq("id", propertyId)
+
+      if (error) {
+        console.error("[v0] Error deleting property:", error.message, error.details)
+        alert("Erro ao deletar propriedade: " + error.message)
+        return
+      }
+
+      console.log("[v0] Property deleted successfully:", propertyId)
+      setProperties((prev) => prev.filter((p) => p.id !== propertyId))
+      alert("Propriedade deletada com sucesso")
+    } catch (error) {
+      console.error("[v0] Exception deleting property:", error)
+      alert("Erro interno ao deletar propriedade")
+    }
+  }
 
   const renderMedia = (property: Property) => {
     const media = property.media && property.media.length > 0 ? property.media[0] : null
     const fallbackImage =
-      property.images[0] || `/placeholder.svg?height=200&width=300&query=property-${property.property_type}`
+      (property.images && property.images.length > 0 ? property.images[0] : null) ||
+      `/placeholder.svg?height=200&width=300&query=property-${property.property_type}`
 
     if (media) {
       if (media.kind === "video") {
@@ -251,25 +295,13 @@ export function PropertyFeed({
     return labels[status as keyof typeof labels] || status
   }
 
-  const getApprovalStatusColor = (status: string) => {
-    const colors = {
-      pending: "bg-yellow-100 text-yellow-800",
-      approved: "bg-green-100 text-green-800",
-      rejected: "bg-red-100 text-red-800",
-    }
-    return colors[status as keyof typeof colors] || "bg-gray-100 text-gray-800"
-  }
-
-  const getApprovalStatusLabel = (status: string) => {
-    const labels = {
-      pending: "Pendente",
-      approved: "Aprovada",
-      rejected: "Rejeitada",
-    }
-    return labels[status as keyof typeof labels] || status
-  }
-
   const openPropertyPage = (property: Property) => {
+    console.log("[v0] Opening property page for:", {
+      id: property.id,
+      title: property.title,
+      owner_id: property.owner_id,
+    })
+
     if (!property.id) {
       console.error("[v0] Property ID is missing:", property)
       alert("Erro: ID da propriedade não encontrado. Tente recarregar a página.")
@@ -277,12 +309,14 @@ export function PropertyFeed({
     }
 
     const url = `/property/${property.id}`
-    console.log("[v0] Opening property page:", url)
+    console.log("[v0] Navigating to property page:", url)
 
     try {
-      window.location.href = url
+      router.push(url)
     } catch (error) {
       console.error("[v0] Error navigating to property page:", error)
+      console.log("[v0] Falling back to window.location.href")
+      window.location.href = url
     }
   }
 
@@ -326,7 +360,7 @@ export function PropertyFeed({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Ordenação</label>
               <div className="flex gap-1">
@@ -391,22 +425,6 @@ export function PropertyFeed({
                 </SelectContent>
               </Select>
             </div>
-            {userType === "admin" && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Aprovação</label>
-                <Select value={filterApproval} onValueChange={setFilterApproval}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="pending">Pendentes</SelectItem>
-                    <SelectItem value="approved">Aprovadas</SelectItem>
-                    <SelectItem value="rejected">Rejeitadas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -420,11 +438,6 @@ export function PropertyFeed({
               {renderMedia(property)}
               <div className="absolute top-2 left-2 flex gap-1">
                 <Badge className={getStatusColor(property.status)}>{getStatusLabel(property.status)}</Badge>
-                {userType === "admin" && (
-                  <Badge className={getApprovalStatusColor(property.approval_status)}>
-                    {getApprovalStatusLabel(property.approval_status)}
-                  </Badge>
-                )}
               </div>
               <div className="absolute top-2 right-2">
                 <Badge variant="secondary">{getPropertyTypeLabel(property.property_type)}</Badge>
@@ -435,39 +448,39 @@ export function PropertyFeed({
               <div className="space-y-3">
                 {/* Title and Price */}
                 <div>
-                  <h3 className="font-semibold text-lg line-clamp-1">{property.title}</h3>
-                  <p className="text-2xl font-bold text-primary">{formatPrice(property.price)}</p>
+                  <h3 className="font-semibold text-lg line-clamp-1">{property.title || "Título não informado"}</h3>
+                  <p className="text-2xl font-bold text-primary">{formatPrice(property.price || 0)}</p>
                 </div>
 
                 {/* Location */}
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <MapPin className="h-4 w-4" />
                   <span className="text-sm line-clamp-1">
-                    {property.neighborhood}, {property.city}
+                    {property.neighborhood || "Bairro não informado"}, {property.city || "Cidade não informada"}
                   </span>
                 </div>
 
                 {/* Property Details */}
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  {property.bedrooms > 0 && (
+                  {(property.bedrooms || 0) > 0 && (
                     <div className="flex items-center gap-1">
                       <Bed className="h-4 w-4" />
                       <span>{property.bedrooms}</span>
                     </div>
                   )}
-                  {property.bathrooms > 0 && (
+                  {(property.bathrooms || 0) > 0 && (
                     <div className="flex items-center gap-1">
                       <Bath className="h-4 w-4" />
                       <span>{property.bathrooms}</span>
                     </div>
                   )}
-                  {property.garages > 0 && (
+                  {(property.garages || 0) > 0 && (
                     <div className="flex items-center gap-1">
                       <Car className="h-4 w-4" />
                       <span>{property.garages}</span>
                     </div>
                   )}
-                  {property.built_area > 0 && (
+                  {(property.built_area || 0) > 0 && (
                     <div className="flex items-center gap-1">
                       <Ruler className="h-4 w-4" />
                       <span>{property.built_area}m²</span>
@@ -476,10 +489,10 @@ export function PropertyFeed({
                 </div>
 
                 {/* Features */}
-                {property.features.length > 0 && (
+                {property.features && property.features.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {property.features.slice(0, 3).map((feature) => (
-                      <Badge key={feature} variant="outline" className="text-xs">
+                    {property.features.slice(0, 3).map((feature, index) => (
+                      <Badge key={`${feature}-${index}`} variant="outline" className="text-xs">
                         {feature}
                       </Badge>
                     ))}
@@ -493,7 +506,7 @@ export function PropertyFeed({
 
                 {/* Owner */}
                 <div className="text-sm text-muted-foreground">
-                  Por: <span className="font-medium">{property.owner_name}</span>
+                  Por: <span className="font-medium">{property.owner_name || "Proprietário não informado"}</span>
                 </div>
 
                 {/* Actions */}
@@ -510,6 +523,17 @@ export function PropertyFeed({
                   {property.owner_id === currentUserId && (
                     <Button size="sm" variant="outline" onClick={() => onEditProperty?.(property)}>
                       <Edit className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {userType === "admin" && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDeleteProperty(property.id)}
+                      title="Deletar propriedade"
+                      disabled={!property.id}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
                   <Button size="sm" variant="outline" onClick={() => onShareProperty?.(property)}>
@@ -537,14 +561,8 @@ export function PropertyFeed({
             <div className="text-muted-foreground">
               {properties.length === 0 ? (
                 <>
-                  <h3 className="text-lg font-medium mb-2">
-                    {userType === "admin" ? "Nenhuma propriedade cadastrada" : "Nenhuma propriedade aprovada"}
-                  </h3>
-                  <p className="text-sm">
-                    {userType === "admin"
-                      ? "Seja o primeiro a adicionar uma propriedade ao feed!"
-                      : "Aguarde a aprovação das propriedades pelos administradores."}
-                  </p>
+                  <h3 className="text-lg font-medium mb-2">Nenhuma propriedade cadastrada</h3>
+                  <p className="text-sm">Seja o primeiro a adicionar uma propriedade ao feed!</p>
                 </>
               ) : (
                 <>
@@ -563,3 +581,6 @@ export function PropertyFeed({
     </div>
   )
 }
+
+export { PropertyFeed }
+export default PropertyFeed

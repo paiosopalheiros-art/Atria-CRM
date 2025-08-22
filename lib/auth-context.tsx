@@ -140,6 +140,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: {
           emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || window.location.origin,
+          data: {
+            full_name: userData.fullName,
+            phone: userData.phone || null,
+            creci: userData.creci || null,
+            invite_code: userData.inviteCode,
+          },
         },
       })
 
@@ -148,67 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(error.message)
       }
 
-      if (data.user) {
-        let defaultAgencyId: string
-
-        try {
-          // Try to get existing default agency
-          const { data: existingAgency, error: agencyError } = await supabase
-            .from("agencies")
-            .select("id")
-            .eq("name", "Agência Padrão")
-            .single()
-
-          if (existingAgency && !agencyError) {
-            defaultAgencyId = existingAgency.id
-            console.log("[v0] Using existing default agency:", defaultAgencyId)
-          } else {
-            // Create default agency if it doesn't exist
-            const { data: newAgency, error: createError } = await supabase
-              .from("agencies")
-              .insert({
-                name: "Agência Padrão",
-                slug: "agencia-padrao",
-                about: "Agência padrão para novos usuários",
-                owner_id: data.user.id,
-              })
-              .select("id")
-              .single()
-
-            if (createError || !newAgency) {
-              console.error("[v0] Failed to create default agency:", createError)
-              throw new Error("Falha ao criar agência padrão")
-            }
-
-            defaultAgencyId = newAgency.id
-            console.log("[v0] Created new default agency:", defaultAgencyId)
-          }
-        } catch (agencyError) {
-          console.error("[v0] Agency setup error:", agencyError)
-          throw new Error("Falha ao configurar agência")
-        }
-
-        const { error: profileError } = await supabase.from("user_profiles").insert({
-          user_id: data.user.id,
-          email: data.user.email,
-          full_name: userData.fullName,
-          user_type: userType,
-          phone: userData.phone || null,
-          creci: userData.creci || null,
-          agency_id: defaultAgencyId, // Always use valid agency ID
-          invite_code: userData.inviteCode,
-          is_active: true,
-        })
-
-        if (profileError) {
-          console.error("[v0] Profile creation error:", profileError)
-          throw new Error("Falha ao criar perfil do usuário")
-        }
-
-        console.log("[v0] User profile created with agency:", defaultAgencyId)
-      }
-
       console.log("[v0] Registration successful:", data.user?.email)
+      // Profile will be created automatically by the database trigger
     } catch (error) {
       console.error("[v0] Registration failed:", error)
       throw error

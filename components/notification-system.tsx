@@ -6,7 +6,22 @@ import { Badge } from "@/components/ui/badge"
 import { Bell, X, AlertTriangle, Clock, CheckCircle } from "lucide-react"
 import { storage } from "@/lib/storage-service"
 import { safeGetProperty } from "@/lib/type-guards"
-import type { Client } from "@/lib/mock-data"
+
+interface Client {
+  id: string
+  name: string
+  email: string
+  phone: string
+  status: "lead" | "interested" | "negotiating" | "closed" | "lost"
+  nextFollowUp?: string
+  lastContact?: string
+  createdAt: string
+  budget?: string
+  propertyType?: string
+  preferredLocation?: string
+  notes?: string
+  source?: string
+}
 
 interface Notification {
   id: string
@@ -37,7 +52,7 @@ export function NotificationSystem({ clients }: NotificationSystemProps) {
     clients.forEach((client) => {
       const clientName = safeGetProperty(client, "name", "Cliente sem nome")
       const nextFollowUp = safeGetProperty(client, "nextFollowUp", null)
-      const status = safeGetProperty(client, "status", "cold")
+      const status = safeGetProperty(client, "status", "lead")
       const lastContact = safeGetProperty(client, "lastContact", null)
       const createdAt = safeGetProperty(client, "createdAt", null)
 
@@ -67,8 +82,8 @@ export function NotificationSystem({ clients }: NotificationSystemProps) {
         })
       }
 
-      // Check for hot clients without recent contact
-      if (status === "hot" && lastContact) {
+      // Check for interested clients without recent contact
+      if (status === "interested" && lastContact) {
         const lastContactDate = new Date(lastContact)
         const threeDaysAgo = new Date()
         threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
@@ -78,8 +93,8 @@ export function NotificationSystem({ clients }: NotificationSystemProps) {
           newNotifications.push({
             id: `hot-${client.id}`,
             type: "hot_client",
-            title: "Cliente Quente Sem Contato",
-            message: `${clientName} está quente mas não tem contato há ${daysSinceContact} dias`,
+            title: "Cliente Interessado Sem Contato",
+            message: `${clientName} está interessado mas não tem contato há ${daysSinceContact} dias`,
             clientId: client.id,
             timestamp: new Date().toISOString(),
             read: false,

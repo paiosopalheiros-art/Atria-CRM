@@ -503,58 +503,55 @@ export default function AIAssistant() {
     }
 
     setChatMessages((prev) => [...prev, userMessage])
+    const currentInput = inputMessage
     setInputMessage("")
     setIsAnalyzing(true)
 
-    // Simulate AI processing
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(inputMessage, clients)
+    try {
+      // Build context from previous messages
+      const context = chatMessages.map((msg) => ({
+        role: msg.type === "user" ? ("user" as const) : ("assistant" as const),
+        content: msg.content,
+      }))
+
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: currentInput,
+          userType: "admin", // You can make this dynamic based on user role
+          context: context,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get AI response")
+      }
+
+      const data = await response.json()
+
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: "ai",
-        content: aiResponse,
+        content: data.message,
         timestamp: new Date(),
       }
+
       setChatMessages((prev) => [...prev, aiMessage])
+    } catch (error) {
+      console.error("Error sending message to AI:", error)
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        type: "ai",
+        content: "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.",
+        timestamp: new Date(),
+      }
+      setChatMessages((prev) => [...prev, errorMessage])
+    } finally {
       setIsAnalyzing(false)
-    }, 1500)
-  }
-
-  const generateAIResponse = (message: string, clientsData: Client[]): string => {
-    const lowerMessage = message.toLowerCase()
-
-    if (lowerMessage.includes("cliente") && lowerMessage.includes("quente")) {
-      const hotClients = clientsData.filter((c) => c.temperature === "hot")
-      return `Você tem ${hotClients.length} clientes quentes atualmente. Recomendo priorizar: ${hotClients
-        .slice(0, 3)
-        .map((c) => c.name)
-        .join(", ")}. Para clientes quentes, o ideal é contato a cada 2-3 dias com propostas concretas.`
     }
-
-    if (lowerMessage.includes("follow") || lowerMessage.includes("contato")) {
-      const needFollowUp = clientsData.filter(
-        (c) => new Date(c.lastContact) < new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-      )
-      return `${needFollowUp.length} clientes precisam de follow-up urgente. Sugiro começar pelos de maior orçamento: ${needFollowUp
-        .sort((a, b) => Number.parseInt(b.budget.replace(/\D/g, "")) - Number.parseInt(a.budget.replace(/\D/g, "")))
-        .slice(0, 3)
-        .map((c) => c.name)
-        .join(", ")}.`
-    }
-
-    if (lowerMessage.includes("estratégia") || lowerMessage.includes("vendas")) {
-      return `Baseado na análise dos seus clientes, recomendo: 1) Foque nos clientes quentes com orçamento acima de R$ 500k, 2) Crie campanha de nurturing para prospects mornos, 3) Implemente sistema de pontuação para priorizar leads. Quer que eu detalhe alguma dessas estratégias?`
-    }
-
-    if (lowerMessage.includes("relatório") || lowerMessage.includes("análise")) {
-      const totalClients = clientsData.length
-      const hotClients = clientsData.filter((c) => c.temperature === "hot").length
-      const prospects = clientsData.filter((c) => c.status === "prospect").length
-
-      return `Análise atual: ${totalClients} clientes totais, ${hotClients} quentes (${Math.round((hotClients / totalClients) * 100)}%), ${prospects} prospects. Taxa de conversão estimada: ${Math.round((prospects / totalClients) * 100)}%. Recomendo focar na conversão de prospects para aumentar o pipeline.`
-    }
-
-    return `Entendi sua pergunta sobre "${message}". Com base nos dados dos seus clientes, posso ajudar com análises específicas, estratégias de follow-up, identificação de oportunidades ou relatórios de performance. Pode ser mais específico sobre o que precisa?`
   }
 
   const getPriorityColor = (priority: string) => {

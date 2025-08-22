@@ -1,12 +1,54 @@
-import type { User, Property, Client } from "./mock-data"
+interface User {
+  id: string
+  email: string
+  name: string
+  userType: "admin" | "partner" | "captador" | "vendedor"
+  isActive: boolean
+  agencyId?: string
+  createdAt: string
+}
+
+interface Property {
+  id: string
+  title: string
+  description: string
+  price: number
+  location: string
+  type: "casa" | "apartamento" | "cobertura" | "terreno" | "comercial"
+  bedrooms?: number
+  bathrooms?: number
+  area: number
+  images: string[]
+  status: "available" | "sold" | "rented" | "reserved"
+  ownerId: string
+  agencyId: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface Client {
+  id: string
+  name: string
+  email: string
+  phone: string
+  status: "lead" | "interested" | "negotiating" | "closed" | "lost"
+  nextFollowUp?: string
+  lastContact?: string
+  createdAt: string
+  budget?: string
+  propertyType?: string
+  preferredLocation?: string
+  notes?: string
+  source?: string
+}
 
 export function isValidUser(user: any): user is User {
   return (
     user &&
     typeof user.id === "string" &&
-    typeof user.fullName === "string" &&
+    typeof user.name === "string" &&
     typeof user.userType === "string" &&
-    ["admin", "partner", "captador"].includes(user.userType)
+    ["admin", "partner", "captador", "vendedor"].includes(user.userType)
   )
 }
 

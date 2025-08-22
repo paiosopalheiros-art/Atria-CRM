@@ -99,33 +99,62 @@ export function PropertyUploadDialog({
         .eq("user_id", userId)
         .single()
 
+      console.log("[v0] Creating property with data:", {
+        title: formData.title,
+        description: formData.description,
+        price: Number(formData.price),
+        property_type: formData.propertyType,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip_code: formData.zipCode,
+        agency_id: userProfile?.agency_id || null,
+        status: "available",
+        user_id: userId,
+        user_name: userName,
+      })
+
       const { data: property, error: propertyError } = await supabase
         .from("properties")
         .insert({
           title: formData.title,
           description: formData.description,
-          price_sale: Number(formData.price),
-          area_total: Number(formData.lotSize) || null,
-          area_built: Number(formData.builtArea) || null,
-          rooms: Number(formData.bedrooms) || null,
-          bathrooms: Number(formData.bathrooms) || null,
-          garage_spaces: Number(formData.garages) || null,
-          type: formData.propertyType,
+          price: Number(formData.price),
+          property_type: formData.propertyType,
           address: formData.address,
-          neighborhood: formData.neighborhood,
           city: formData.city,
           state: formData.state,
           zip_code: formData.zipCode,
-          features: formData.features,
           agency_id: userProfile?.agency_id || null,
           status: "available",
         })
         .select()
         .single()
 
-      if (propertyError) throw propertyError
+      if (propertyError) {
+        console.error("[v0] Property creation error:", propertyError)
+        throw propertyError
+      }
 
-      console.log("[v0] Property created successfully:", property.id)
+      console.log("[v0] Property created successfully:", {
+        id: property.id,
+        title: property.title,
+        status: property.status,
+        created_at: property.created_at,
+        full_property: property,
+      })
+
+      const { data: verifyProperty, error: verifyError } = await supabase
+        .from("properties")
+        .select("id, title, status, created_at")
+        .eq("id", property.id)
+        .single()
+
+      if (verifyError) {
+        console.error("[v0] Error verifying property:", verifyError)
+      } else {
+        console.log("[v0] Property verification after creation:", verifyProperty)
+      }
 
       const uploadedImages = []
       for (const imageUrl of formData.images) {
@@ -163,7 +192,6 @@ export function PropertyUploadDialog({
         ownerName: userName,
         userId: userId,
         status: "available",
-        approvalStatus: "pending",
       }
 
       onAddProperty(propertyForCallback)
@@ -287,8 +315,7 @@ export function PropertyUploadDialog({
           <DialogHeader>
             <DialogTitle>Adicionar Nova Propriedade</DialogTitle>
             <DialogDescription>
-              Preencha os detalhes da propriedade. Sua publicação será analisada pelo administrador antes de aparecer no
-              feed.
+              Preencha os detalhes da propriedade. Sua publicação aparecerá automaticamente no feed após ser salva.
             </DialogDescription>
           </DialogHeader>
 

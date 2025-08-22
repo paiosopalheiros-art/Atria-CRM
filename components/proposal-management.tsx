@@ -17,6 +17,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { MessageSquare, Clock, CheckCircle, XCircle, AlertCircle, Send, Phone, Mail, User, Filter } from "lucide-react"
 import type { Proposal } from "./property-proposal-form"
+import { supabase } from "@/lib/supabase/client"
 
 interface ProposalManagementProps {
   userId: string
@@ -40,41 +41,145 @@ export function ProposalManagement({ userId, userType }: ProposalManagementProps
   const [newMessage, setNewMessage] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Load current user data
-    const savedUsers = localStorage.getItem("atria-users")
-    if (savedUsers) {
-      const users = JSON.parse(savedUsers)
-      const user = users.find((u: any) => u.id === userId)
-      setCurrentUser(user)
+    loadProposalsFromSupabase()
+    loadMessagesFromSupabase()
+    loadCurrentUser()
+  }, [userId, userType])
+
+  const loadCurrentUser = async () => {
+    try {
+      const { data, error } = await supabase.from("user_profiles").select("*").eq("user_id", userId).maybeSingle()
+
+      if (error) {
+        console.error("[v0] Error loading current user:", error.message)
+        return
+      }
+
+      if (!data) {
+        console.log("[v0] No user profile found, using fallback data")
+        setCurrentUser({
+          user_id: userId,
+          full_name: "Usuário",
+          user_type: userType,
+        })
+        return
+      }
+
+      setCurrentUser(data)
+    } catch (error) {
+      console.error("[v0] Error loading current user:", error)
     }
+  }
 
-    // Load proposals from localStorage
-    const savedProposals = localStorage.getItem("atria-proposals")
-    const savedMessages = localStorage.getItem("atria-proposal-messages")
-
-    if (savedProposals) {
-      let allProposals: Proposal[] = JSON.parse(savedProposals)
+  const loadProposalsFromSupabase = async () => {
+    try {
+      setLoading(true)
+      let query = supabase
+        .from("proposals")
+        .select(`
+          *,
+          properties (
+            title
+          )
+        `)
+        .order("created_at", { ascending: false })
 
       if (userType === "partner") {
-        // Get user's properties to filter relevant proposals
-        const savedProperties = localStorage.getItem("atria-properties")
-        if (savedProperties) {
-          const properties = JSON.parse(savedProperties)
-          const userPropertyIds = properties.filter((p: any) => p.userId === userId).map((p: any) => p.id)
+        const { data: userProfile } = await supabase
+          .from("user_profiles")
+          .select("agency_id")
+          .eq("user_id", userId)
+          .maybeSingle()
 
-          allProposals = allProposals.filter((p) => userPropertyIds.includes(p.propertyId))
+        if (userProfile?.agency_id) {
+          const { data: agencyProperties } = await supabase
+            .from("properties")
+            .select("id")
+            .eq("agency_id", userProfile.agency_id)
+
+          const propertyIds = agencyProperties?.map((p) => p.id) || []
+          if (propertyIds.length > 0) {
+            query = query.in("property_id", propertyIds)
+          } else {
+            setProposals([])
+            setLoading(false)
+            return
+          }
+        } else {
+          setProposals([])
+          setLoading(false)
+          return
         }
       }
 
-      setProposals(allProposals)
-    }
+      const { data, error } = await query
 
-    if (savedMessages) {
-      setMessages(JSON.parse(savedMessages))
+      if (error) {
+        console.error("[v0] Error loading proposals:", error.message)
+        return
+      }
+
+      const formattedProposals: Proposal[] = (data || []).map((proposal: any) => ({
+        id: proposal.id,
+        propertyId: proposal.property_id,
+        propertyTitle: proposal.properties?.title || "Propriedade",
+        clientName: proposal.client_name,
+        clientEmail: proposal.client_email,
+        clientPhone: proposal.client_phone,
+        proposalType: proposal.proposal_type,
+        proposedValue: proposal.proposed_value,
+        message: proposal.message,
+        financing: proposal.financing || false,
+        visitRequested: proposal.visit_requested || false,
+        createdAt: proposal.created_at,
+        status: proposal.status,
+      }))
+
+      setProposals(formattedProposals)
+    } catch (error) {
+      console.error("[v0] Error loading proposals:", error)
+    } finally {
+      setLoading(false)
     }
-  }, [userId, userType])
+  }
+
+  const loadMessagesFromSupabase = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("proposal_messages")
+        .select("*")
+        .order("created_at", { ascending: true })
+
+      if (error) {
+        // Check if the error is due to missing table
+        if (error.message.includes("Could not find the table") || error.message.includes("schema cache")) {
+          console.log("[v0] proposal_messages table not found, using empty messages array")
+          setMessages([])
+          return
+        }
+        console.error("[v0] Error loading messages:", error)
+        return
+      }
+
+      const formattedMessages: ProposalMessage[] = (data || []).map((message: any) => ({
+        id: message.id,
+        proposalId: message.proposal_id,
+        senderId: message.sender_id,
+        senderName: message.sender_name,
+        senderType: message.sender_type,
+        message: message.message,
+        createdAt: message.created_at,
+      }))
+
+      setMessages(formattedMessages)
+    } catch (error) {
+      console.error("[v0] Error loading messages:", error)
+      setMessages([])
+    }
+  }
 
   const filteredProposals = proposals.filter((proposal) => {
     if (filterStatus === "all") return true
@@ -128,34 +233,65 @@ export function ProposalManagement({ userId, userType }: ProposalManagementProps
     }).format(price)
   }
 
-  const updateProposalStatus = (proposalId: string, newStatus: Proposal["status"]) => {
-    const updatedProposals = proposals.map((p) => (p.id === proposalId ? { ...p, status: newStatus } : p))
-    setProposals(updatedProposals)
+  const updateProposalStatus = async (proposalId: string, newStatus: Proposal["status"]) => {
+    try {
+      const { error } = await supabase.from("proposals").update({ status: newStatus }).eq("id", proposalId)
 
-    const allProposals = JSON.parse(localStorage.getItem("atria-proposals") || "[]")
-    const updatedAllProposals = allProposals.map((p: Proposal) =>
-      p.id === proposalId ? { ...p, status: newStatus } : p,
-    )
-    localStorage.setItem("atria-proposals", JSON.stringify(updatedAllProposals))
+      if (error) {
+        console.error("[v0] Error updating proposal status:", error)
+        alert("Erro ao atualizar status da proposta")
+        return
+      }
+
+      const updatedProposals = proposals.map((p) => (p.id === proposalId ? { ...p, status: newStatus } : p))
+      setProposals(updatedProposals)
+    } catch (error) {
+      console.error("[v0] Error updating proposal status:", error)
+      alert("Erro interno ao atualizar status da proposta")
+    }
   }
 
-  const sendMessage = (proposalId: string) => {
+  const sendMessage = async (proposalId: string) => {
     if (!newMessage.trim()) return
 
-    const message: ProposalMessage = {
-      id: Date.now().toString(),
-      proposalId,
-      senderId: userId,
-      senderName: currentUser?.fullName || "Corretor",
-      senderType: "agent",
-      message: newMessage,
-      createdAt: new Date().toISOString(),
-    }
+    try {
+      const messageData = {
+        proposal_id: proposalId,
+        sender_id: userId,
+        sender_name: currentUser?.full_name || "Corretor",
+        sender_type: "agent",
+        message: newMessage,
+      }
 
-    const updatedMessages = [...messages, message]
-    setMessages(updatedMessages)
-    localStorage.setItem("atria-proposal-messages", JSON.stringify(updatedMessages))
-    setNewMessage("")
+      const { data, error } = await supabase.from("proposal_messages").insert([messageData]).select().single()
+
+      if (error) {
+        // Check if the error is due to missing table
+        if (error.message.includes("Could not find the table") || error.message.includes("schema cache")) {
+          alert("Sistema de mensagens ainda não está disponível. Execute o script SQL para ativar esta funcionalidade.")
+          return
+        }
+        console.error("[v0] Error sending message:", error)
+        alert("Erro ao enviar mensagem")
+        return
+      }
+
+      const formattedMessage: ProposalMessage = {
+        id: data.id,
+        proposalId: data.proposal_id,
+        senderId: data.sender_id,
+        senderName: data.sender_name,
+        senderType: data.sender_type,
+        message: data.message,
+        createdAt: data.created_at,
+      }
+
+      setMessages([...messages, formattedMessage])
+      setNewMessage("")
+    } catch (error) {
+      console.error("[v0] Error sending message:", error)
+      alert("Erro interno ao enviar mensagem")
+    }
   }
 
   const getProposalMessages = (proposalId: string) => {
@@ -164,6 +300,17 @@ export function ProposalManagement({ userId, userType }: ProposalManagementProps
 
   const pendingCount = proposals.filter((p) => p.status === "pending").length
   const negotiatingCount = proposals.filter((p) => p.status === "negotiating").length
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Carregando propostas...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -231,6 +378,17 @@ export function ProposalManagement({ userId, userType }: ProposalManagementProps
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
             Filtros
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                loadProposalsFromSupabase()
+                loadMessagesFromSupabase()
+              }}
+              className="ml-auto"
+            >
+              Atualizar
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -402,7 +560,6 @@ export function ProposalManagement({ userId, userType }: ProposalManagementProps
                     </DialogHeader>
 
                     <div className="flex flex-col h-96">
-                      {/* Messages */}
                       <div className="flex-1 overflow-y-auto space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
                         {getProposalMessages(proposal.id).map((message) => (
                           <div
@@ -436,7 +593,6 @@ export function ProposalManagement({ userId, userType }: ProposalManagementProps
                         )}
                       </div>
 
-                      {/* Message Input */}
                       <div className="flex gap-2 mt-4">
                         <Input
                           placeholder="Digite sua mensagem..."

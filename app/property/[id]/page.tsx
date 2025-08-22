@@ -55,6 +55,8 @@ export default function PropertyPage() {
   const [showAccessDenied, setShowAccessDenied] = useState(false)
   const [locationData, setLocationData] = useState<any>(null)
   const [contactData, setContactData] = useState<any>(null)
+  const [nearbyPlaces, setNearbyPlaces] = useState<any[]>([])
+  const [transportOptions, setTransportOptions] = useState<any[]>([])
 
   useEffect(() => {
     const fetchPropertyData = async () => {
@@ -110,16 +112,39 @@ export default function PropertyPage() {
           setLocationData({
             coordinates: { lat: -23.5505, lng: -46.6333 },
             address: `${formattedProperty.address || "Endereço não informado"}, ${formattedProperty.neighborhood || ""}, ${formattedProperty.city} - ${formattedProperty.state}`,
-            nearbyPlaces: [], // Would be fetched from a places API
-            transportOptions: [], // Would be calculated based on real location
           })
 
-          setContactData({
-            phone: "(11) 99999-8888", // Would come from user profile
-            email: "corretor@atria.com.br", // Would come from user profile
-            whatsapp: "5511999998888",
-            name: formattedProperty.ownerName || "Corretor Responsável",
-          })
+          if (propertyData.user_id) {
+            const { data: userProfile } = await supabase
+              .from("user_profiles")
+              .select("full_name, email, phone")
+              .eq("user_id", propertyData.user_id)
+              .single()
+
+            if (userProfile) {
+              setContactData({
+                phone: userProfile.phone || "(11) 99999-8888",
+                email: userProfile.email || "corretor@atria.com.br",
+                whatsapp: userProfile.phone?.replace(/\D/g, "") || "5511999998888",
+                name: userProfile.full_name || formattedProperty.ownerName || "Corretor Responsável",
+              })
+            }
+          }
+
+          const { data: places } = await supabase.from("nearby_places").select("*").eq("property_id", propertyData.id)
+
+          if (places && places.length > 0) {
+            setNearbyPlaces(places)
+          }
+
+          const { data: transport } = await supabase
+            .from("transport_options")
+            .select("*")
+            .eq("property_id", propertyData.id)
+
+          if (transport && transport.length > 0) {
+            setTransportOptions(transport)
+          }
 
           console.log("[v0] Loaded property from Supabase:", formattedProperty)
         }
@@ -654,47 +679,33 @@ export default function PropertyPage() {
                         <p className="text-sm text-muted-foreground">Como chegar ao centro da cidade</p>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {/*mockLocationData.transportOptions.map((option, index) => (
+                        {transportOptions.map((option, index) => (
                           <div
                             key={index}
-                            className={`flex items-center gap-4 p-4 border-2 rounded-xl hover:shadow-md transition-all cursor-pointer
-                              ${
-                                option.color === "blue"
-                                  ? "border-blue-200 hover:border-blue-300 bg-blue-50/50"
-                                  : option.color === "green"
-                                    ? "border-green-200 hover:border-green-300 bg-green-50/50"
-                                    : "border-orange-200 hover:border-orange-300 bg-orange-50/50"
-                              }`}
-                            onClick={() => getDirections()}
+                            className={`flex items-center gap-4 p-4 border-2 rounded-xl hover:shadow-md transition-all cursor-pointer border-blue-200 hover:border-blue-300 bg-blue-50/50`}
+                            onClick={() =>
+                              window.open(
+                                `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(locationData?.address || "")}`,
+                                "_blank",
+                              )
+                            }
                           >
                             <div className="flex-shrink-0">
-                              <div
-                                className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl
-                                ${
-                                  option.color === "blue"
-                                    ? "bg-blue-100"
-                                    : option.color === "green"
-                                      ? "bg-green-100"
-                                      : "bg-orange-100"
-                                }`}
-                              >
-                                {option.icon}
+                              <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl bg-blue-100">
+                                {option.icon || "🚗"}
                               </div>
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
-                                <span className="font-semibold text-lg capitalize">
-                                  {option.type === "car" ? "Carro" : option.type === "metro" ? "Metrô" : "Ônibus"}
-                                </span>
+                                <span className="font-semibold text-lg capitalize">{option.type}</span>
                                 <Badge variant="secondary" className="bg-white/80 text-gray-700">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  {option.time}
+                                  {option.duration}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs">
                                   {option.distance}
                                 </Badge>
                               </div>
-                              <p className="text-sm text-gray-600 font-medium">{option.route}</p>
+                              <p className="text-sm text-gray-600 font-medium">{option.description}</p>
                             </div>
                             <div className="flex-shrink-0">
                               <Button size="sm" variant="ghost" className="text-blue-600">
@@ -702,7 +713,7 @@ export default function PropertyPage() {
                               </Button>
                             </div>
                           </div>
-                        ))*/}
+                        ))}
                       </CardContent>
                     </Card>
 
@@ -712,30 +723,30 @@ export default function PropertyPage() {
                         <p className="text-sm text-muted-foreground">Principais locais na região</p>
                       </CardHeader>
                       <CardContent>
-                        {/*<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {mockLocationData.nearbyPlaces.map((place, index) => (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {nearbyPlaces.map((place, index) => (
                             <div
                               key={index}
                               className="flex items-center gap-3 p-4 border rounded-xl hover:shadow-md transition-all cursor-pointer bg-gradient-to-r from-white to-gray-50"
                               onClick={() => {
-                                const query = encodeURIComponent(`${place.name} próximo a ${mockLocationData.address}`)
+                                const query = encodeURIComponent(`${place.name} próximo a ${locationData?.address}`)
                                 window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank")
                               }}
                             >
                               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-xl">
-                                {place.icon}
+                                {place.icon || "📍"}
                               </div>
                               <div className="flex-1">
                                 <p className="font-semibold text-sm text-gray-800">{place.name}</p>
                                 <p className="text-xs text-blue-600 font-medium">{place.distance}</p>
-                                <p className="text-xs text-gray-500 capitalize">{place.type}</p>
+                                <p className="text-xs text-gray-500 capitalize">{place.category}</p>
                               </div>
                               <div className="text-gray-400">
                                 <MapPin className="h-4 w-4" />
                               </div>
                             </div>
                           ))}
-                        </div>*/}
+                        </div>
                       </CardContent>
                     </Card>
                   </>

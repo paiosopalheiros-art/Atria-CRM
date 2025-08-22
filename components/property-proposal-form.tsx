@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Send, User, DollarSign } from "lucide-react"
 import type { Property } from "./property-upload-dialog"
+import { supabase } from "@/lib/supabase/client"
 
 interface PropertyProposalFormProps {
   open: boolean
@@ -59,45 +60,50 @@ export function PropertyProposalForm({ open, onOpenChange, property }: PropertyP
       return
     }
 
-    const proposal: Proposal = {
-      id: Date.now().toString(),
-      propertyId: property.id,
-      propertyTitle: property.title,
-      clientName: formData.clientName,
-      clientEmail: formData.clientEmail,
-      clientPhone: formData.clientPhone,
-      proposalType: formData.proposalType as Proposal["proposalType"],
-      proposedValue: formData.proposedValue ? Number(formData.proposedValue) : undefined,
-      message: formData.message,
-      financing: formData.financing,
-      visitRequested: formData.visitRequested,
-      createdAt: new Date().toISOString(),
-      status: "pending",
+    try {
+      const proposalData = {
+        property_id: property.id,
+        client_name: formData.clientName,
+        client_email: formData.clientEmail,
+        client_phone: formData.clientPhone,
+        proposal_type: formData.proposalType,
+        proposed_value: formData.proposedValue ? Number(formData.proposedValue) : null,
+        message: formData.message,
+        financing: formData.financing,
+        visit_requested: formData.visitRequested,
+        status: "pending",
+      }
+
+      const { data, error } = await supabase.from("proposals").insert([proposalData]).select().single()
+
+      if (error) {
+        console.error("[v0] Error creating proposal:", error)
+        alert("Erro ao enviar proposta. Tente novamente.")
+        setIsLoading(false)
+        return
+      }
+
+      console.log("[v0] Proposal created successfully:", data)
+      alert("Proposta enviada com sucesso! O corretor entrará em contato em breve.")
+      onOpenChange(false)
+
+      // Reset form
+      setFormData({
+        clientName: "",
+        clientEmail: "",
+        clientPhone: "",
+        proposalType: "",
+        proposedValue: "",
+        message: "",
+        financing: false,
+        visitRequested: false,
+      })
+    } catch (error) {
+      console.error("[v0] Error creating proposal:", error)
+      alert("Erro interno ao enviar proposta. Tente novamente.")
+    } finally {
+      setIsLoading(false)
     }
-
-    // Save to localStorage
-    const existingProposals = JSON.parse(localStorage.getItem("atria-proposals") || "[]")
-    existingProposals.push(proposal)
-    localStorage.setItem("atria-proposals", JSON.stringify(existingProposals))
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    alert("Proposta enviada com sucesso! O corretor entrará em contato em breve.")
-    onOpenChange(false)
-
-    // Reset form
-    setFormData({
-      clientName: "",
-      clientEmail: "",
-      clientPhone: "",
-      proposalType: "",
-      proposedValue: "",
-      message: "",
-      financing: false,
-      visitRequested: false,
-    })
-    setIsLoading(false)
   }
 
   const formatPrice = (price: number) => {
