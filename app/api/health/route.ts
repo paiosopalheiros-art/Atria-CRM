@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server"
 import { ApiResponseHelper } from "@/lib/api-response"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
