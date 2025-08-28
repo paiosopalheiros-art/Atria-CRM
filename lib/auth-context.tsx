@@ -19,8 +19,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  console.log("[v0] AuthProvider component initializing...")
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  
+  console.log("[v0] AuthProvider state:", { loading, hasUser: !!user })
 
   useEffect(() => {
     console.log("[v0] AuthProvider useEffect triggered - calling checkAuth")
