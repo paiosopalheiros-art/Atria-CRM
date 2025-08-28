@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,9 +6,9 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 ROOT_DIR = Path(__file__).parent
@@ -20,7 +20,11 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(
+    title="Web-Mobile Connect API",
+    description="API para comunicação entre aplicação web e mobile",
+    version="1.0.0"
+)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -31,9 +35,41 @@ class StatusCheck(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_name: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    status: str = "active"
+    platform: str = "web"
+    version: Optional[str] = "1.0.0"
 
 class StatusCheckCreate(BaseModel):
     client_name: str
+    platform: Optional[str] = "web"
+    version: Optional[str] = "1.0.0"
+
+class User(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    email: str
+    platform: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_active: datetime = Field(default_factory=datetime.utcnow)
+    is_active: bool = True
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    platform: str = "web"
+
+class ApiResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None
+
+class SystemStats(BaseModel):
+    total_users: int
+    active_sessions: int
+    total_status_checks: int
+    web_users: int
+    mobile_users: int
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
 
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
