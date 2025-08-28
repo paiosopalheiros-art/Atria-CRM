@@ -183,7 +183,7 @@ class WebMobileConnectTester:
         if not self.created_user_id:
             return self.log_test("Mobile Sync", False, "- No user ID available")
         
-        # Check the backend code - it expects user_id as query param, not in body
+        # The endpoint expects user_id as query parameter
         params = {"user_id": self.created_user_id}
         
         success, response = self.make_request('POST', 'mobile/sync', params=params)
