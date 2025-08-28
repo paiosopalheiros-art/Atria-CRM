@@ -110,9 +110,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[v0] Attempting real Supabase login for:", email)
 
       const supabase = createClient()
+      console.log("[v0] Supabase client created for login")
+      
+      console.log("[v0] Calling supabase.auth.signInWithPassword")
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
+      })
+
+      console.log("[v0] signInWithPassword response:", { 
+        hasData: !!data, 
+        hasUser: !!data?.user, 
+        hasError: !!error,
+        errorMessage: error?.message 
       })
 
       if (error) {
@@ -128,7 +138,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
       }
     } catch (error) {
-      console.error("[v0] Login failed:", error)
+      console.error("[v0] Login failed with error:", error)
+      console.error("[v0] Error details:", {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack
+      })
       throw error
     }
   }
