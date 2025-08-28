@@ -142,6 +142,8 @@ export default function AtriaApp() {
     "userProfile:",
     !!userProfile,
   )
+  console.log("[v0] Full user object:", user)
+  console.log("[v0] Loading state details:", { loading, timestamp: new Date().toISOString() })
 
   if (loading || (user && profileLoading)) {
     console.log("[v0] Rendering loading screen")
