@@ -30,6 +30,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth()
   }, [])
 
+  // Fallback mechanism - if useEffect doesn't run, force auth check after component mount
+  useLayoutEffect(() => {
+    console.log("[v0] AuthProvider useLayoutEffect triggered as fallback")
+    const timer = setTimeout(() => {
+      if (loading) {
+        console.log("[v0] Fallback: useEffect didn't run, forcing checkAuth")
+        checkAuth()
+      }
+    }, 1000)
+    
+    return () => clearTimeout(timer)
+  }, [loading])
+
   const checkAuth = async () => {
     console.log("[v0] Starting auth check with timeout protection...")
     
