@@ -111,6 +111,12 @@ async def get_status_checks(
             query["platform"] = platform
         
         status_checks = await db.status_checks.find(query).limit(limit).sort("timestamp", -1).to_list(limit)
+        
+        # Remove ObjectId from results
+        for check in status_checks:
+            if "_id" in check:
+                del check["_id"]
+        
         return [StatusCheck(**status_check) for status_check in status_checks]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar status checks: {str(e)}")
