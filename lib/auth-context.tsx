@@ -136,14 +136,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (email: string, password: string, userData: any) => {
     try {
       console.log("[v0] Attempting real Supabase registration for:", email)
+      console.log("[v0] Registration userData:", userData)
 
       const supabase = createClient()
+      console.log("[v0] Supabase client created for registration")
+      
+      console.log("[v0] Calling supabase.auth.signUp with:", {
+        email,
+        hasPassword: !!password,
+        redirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || window.location.origin
+      })
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || window.location.origin,
         },
+      })
+
+      console.log("[v0] signUp response:", { 
+        hasData: !!data, 
+        hasUser: !!data?.user, 
+        hasError: !!error,
+        errorMessage: error?.message 
       })
 
       if (error) {
@@ -159,7 +175,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
       }
     } catch (error) {
-      console.error("[v0] Registration failed:", error)
+      console.error("[v0] Registration failed with error:", error)
+      console.error("[v0] Error details:", {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack
+      })
       throw error
     }
   }
