@@ -145,6 +145,19 @@ export default function AtriaApp() {
   console.log("[v0] Full user object:", user)
   console.log("[v0] Loading state details:", { loading, timestamp: new Date().toISOString() })
 
+  // Emergency fallback - if stuck in loading for too long, force it to false
+  useEffect(() => {
+    const emergencyTimer = setTimeout(() => {
+      if (loading) {
+        console.warn("[v0] EMERGENCY: Force stopping loading state after 15 seconds")
+        // This will trigger a re-render and potentially unstick the auth
+        window.location.reload()
+      }
+    }, 15000)
+
+    return () => clearTimeout(emergencyTimer)
+  }, [loading])
+
   if (loading || (user && profileLoading)) {
     console.log("[v0] Rendering loading screen at:", new Date().toISOString())
     return (
