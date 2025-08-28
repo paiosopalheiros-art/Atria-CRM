@@ -156,6 +156,12 @@ async def get_users(
             query["is_active"] = True
             
         users = await db.users.find(query).limit(100).sort("created_at", -1).to_list(100)
+        
+        # Remove ObjectId from results
+        for user in users:
+            if "_id" in user:
+                del user["_id"]
+        
         return [User(**user) for user in users]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar usuários: {str(e)}")
