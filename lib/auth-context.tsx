@@ -27,14 +27,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const checkAuth = async () => {
+    console.log("[v0] Starting auth check with timeout protection...")
+    
+    // Add timeout protection
+    const authTimeout = setTimeout(() => {
+      console.warn("[v0] Auth check timeout after 10 seconds, forcing loading to false")
+      setLoading(false)
+      setUser(null)
+    }, 10000)
+
     try {
-      console.log("[v0] Starting real Supabase auth check...")
+      console.log("[v0] Environment check:", {
+        hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + "...",
+        key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) + "..."
+      })
 
       const supabase = createClient()
+      console.log("[v0] Supabase client created successfully")
+
       const {
         data: { session },
         error,
       } = await supabase.auth.getSession()
+
+      console.log("[v0] getSession completed:", {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        error: error?.message
+      })
+
+      clearTimeout(authTimeout)
 
       if (error) {
         console.error("[v0] Auth check error:", error)
@@ -46,11 +70,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: session.user.email || "",
         })
       } else {
-        console.log("[v0] No session found")
+        console.log("[v0] No session found - user not logged in")
         setUser(null)
       }
     } catch (error) {
-      console.error("[v0] Auth check failed:", error)
+      clearTimeout(authTimeout)
+      console.error("[v0] Auth check failed with error:", error)
+      console.error("[v0] Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
       setUser(null)
     } finally {
       console.log("[v0] Auth check completed, setting loading to false")
