@@ -215,6 +215,11 @@ async def mobile_sync(user_id: str, last_sync: Optional[datetime] = None):
         query = {"timestamp": {"$gte": last_sync}} if last_sync else {}
         recent_data = await db.status_checks.find(query).limit(50).to_list(50)
         
+        # Convert ObjectId to string to make it JSON serializable
+        for item in recent_data:
+            if "_id" in item:
+                del item["_id"]  # Remove ObjectId field
+        
         return {
             "success": True,
             "sync_time": datetime.utcnow(),
