@@ -308,7 +308,7 @@ function PropertyFeed({ currentUserId, userType = "partner", onEditProperty, onS
       return
     }
 
-    const url = `/property/${property.id}`
+    const url = `/properties/${property.id}`
     console.log("[v0] Navigating to property page:", url)
 
     try {

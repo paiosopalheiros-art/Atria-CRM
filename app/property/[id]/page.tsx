@@ -31,17 +31,13 @@ import {
 import { PropertyProposalForm } from "@/components/property-proposal-form"
 import { ContractRequestModal } from "@/components/contract-request-modal"
 import type { Property } from "@/components/property-upload-dialog"
-import { supabase } from "@/lib/supabase/client"
-
-declare global {
-  interface Window {
-    google: any
-    initMap: () => void
-  }
-}
+import { createClient } from "@/lib/supabase/client" // Fixed import to use createClient
 
 export default function PropertyPage() {
-  const params = useParams()
+  const { id } = useParams() as { id: string }
+  const idValue: string | number = id && /^\d+$/.test(id) ? Number(id) : id
+  const idStr = String(id || "")
+
   const [property, setProperty] = useState<Property | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isProposalFormOpen, setIsProposalFormOpen] = useState(false)
@@ -58,136 +54,134 @@ export default function PropertyPage() {
   const [nearbyPlaces, setNearbyPlaces] = useState<any[]>([])
   const [transportOptions, setTransportOptions] = useState<any[]>([])
 
+  const supabase = createClient()
+
   useEffect(() => {
+    let mounted = true
     const fetchPropertyData = async () => {
+      if (!id) return // Prevent firing without id
       try {
         setIsLoading(true)
 
         const { data: propertyData, error: propertyError } = await supabase
           .from("properties")
           .select("*")
-          .eq("id", params.id)
-          .single()
+          .eq("id", idValue)
+          .maybeSingle()
 
         if (propertyError) {
           console.error("[v0] Error fetching property:", propertyError)
+        }
+
+        if (!mounted) return
+
+        if (!propertyData) {
           setProperty(null)
           return
         }
 
-        if (propertyData) {
-          const formattedProperty = {
-            id: propertyData.id,
-            title: propertyData.title,
-            description: propertyData.description,
-            price: propertyData.price,
-            type: propertyData.property_type,
-            propertyType: propertyData.property_type,
-            bedrooms: propertyData.bedrooms,
-            bathrooms: propertyData.bathrooms,
-            area: propertyData.area,
-            builtArea: propertyData.built_area,
-            lotArea: propertyData.lot_area,
-            lotSize: propertyData.lot_area,
-            garages: propertyData.garages,
-            address: propertyData.address,
-            neighborhood: propertyData.neighborhood,
-            city: propertyData.city,
-            state: propertyData.state,
-            zipCode: propertyData.zip_code,
-            images: propertyData.images || [],
-            features: propertyData.features || [],
-            status: propertyData.status,
-            approvalStatus: propertyData.approval_status,
-            userId: propertyData.user_id,
-            userType: propertyData.user_type,
-            createdAt: propertyData.created_at,
-            updatedAt: propertyData.updated_at,
-            views: propertyData.views || 0,
-            ownerName: propertyData.owner_name,
-          }
-
-          setProperty(formattedProperty)
-
-          setLocationData({
-            coordinates: { lat: -23.5505, lng: -46.6333 },
-            address: `${formattedProperty.address || "Endereço não informado"}, ${formattedProperty.neighborhood || ""}, ${formattedProperty.city} - ${formattedProperty.state}`,
-          })
-
-          if (propertyData.user_id) {
-            const { data: userProfile } = await supabase
-              .from("user_profiles")
-              .select("full_name, email, phone")
-              .eq("user_id", propertyData.user_id)
-              .single()
-
-            if (userProfile) {
-              setContactData({
-                phone: userProfile.phone || "(11) 99999-8888",
-                email: userProfile.email || "corretor@atria.com.br",
-                whatsapp: userProfile.phone?.replace(/\D/g, "") || "5511999998888",
-                name: userProfile.full_name || formattedProperty.ownerName || "Corretor Responsável",
-              })
-            }
-          }
-
-          const { data: places } = await supabase.from("nearby_places").select("*").eq("property_id", propertyData.id)
-
-          if (places && places.length > 0) {
-            setNearbyPlaces(places)
-          }
-
-          const { data: transport } = await supabase
-            .from("transport_options")
-            .select("*")
-            .eq("property_id", propertyData.id)
-
-          if (transport && transport.length > 0) {
-            setTransportOptions(transport)
-          }
-
-          console.log("[v0] Loaded property from Supabase:", formattedProperty)
+        const formattedProperty: Property = {
+          id: propertyData.id,
+          title: propertyData.title,
+          description: propertyData.description,
+          price: propertyData.price,
+          type: propertyData.property_type,
+          propertyType: propertyData.property_type,
+          bedrooms: propertyData.bedrooms,
+          bathrooms: propertyData.bathrooms,
+          area: propertyData.area,
+          builtArea: propertyData.built_area,
+          lotArea: propertyData.lot_area,
+          lotSize: propertyData.lot_area,
+          garages: propertyData.garages,
+          address: propertyData.address,
+          neighborhood: propertyData.neighborhood,
+          city: propertyData.city,
+          state: propertyData.state,
+          zipCode: propertyData.zip_code,
+          images: propertyData.images || [],
+          features: propertyData.features || [],
+          status: propertyData.status,
+          approvalStatus: propertyData.approval_status,
+          userId: propertyData.user_id,
+          userType: propertyData.user_type,
+          createdAt: propertyData.created_at,
+          updatedAt: propertyData.updated_at,
+          views: propertyData.views || 0,
+          ownerName: propertyData.owner_name,
         }
 
+        setProperty(formattedProperty)
+
+        setLocationData({
+          coordinates: { lat: -23.5505, lng: -46.6333 },
+          address: `${formattedProperty.address || "Endereço não informado"}, ${formattedProperty.neighborhood || ""}, ${formattedProperty.city} - ${formattedProperty.state}`,
+        })
+
+        if (propertyData.user_id) {
+          const { data: userProfile } = await supabase
+            .from("user_profiles")
+            .select("full_name, email, phone")
+            .eq("user_id", propertyData.user_id)
+            .maybeSingle()
+
+          if (mounted && userProfile) {
+            setContactData({
+              phone: userProfile.phone || "(11) 99999-8888",
+              email: userProfile.email || "corretor@atria.com.br",
+              whatsapp: (userProfile.phone || "").replace(/\D/g, "") || "5511999998888",
+              name: userProfile.full_name || formattedProperty.ownerName || "Corretor Responsável",
+            })
+          }
+        }
+
+        const { data: places } = await supabase.from("nearby_places").select("*").eq("property_id", propertyData.id)
+        if (mounted && places?.length) setNearbyPlaces(places)
+
+        const { data: transport } = await supabase
+          .from("transport_options")
+          .select("*")
+          .eq("property_id", propertyData.id)
+        if (mounted && transport?.length) setTransportOptions(transport)
+
+        // sessão atual
         const {
           data: { session },
         } = await supabase.auth.getSession()
-        if (session?.user) {
+
+        if (mounted && session?.user) {
           setCurrentUser({
             id: session.user.id,
             email: session.user.email,
             name: session.user.user_metadata?.full_name || session.user.email,
           })
-
-          if (propertyData) {
-            setIsOwner(propertyData.user_id === session.user.id)
-          }
+          setIsOwner(propertyData.user_id === session.user.id)
         }
       } catch (error) {
         console.error("[v0] Error fetching property data:", error)
-        setProperty(null)
+        if (mounted) setProperty(null)
       } finally {
-        setIsLoading(false)
+        if (mounted) setIsLoading(false)
       }
     }
 
     fetchPropertyData()
-  }, [params.id])
+    return () => {
+      mounted = false
+    }
+  }, [id, idValue, idStr, supabase])
 
   useEffect(() => {
-    // Simple iframe implementation - no API key required
     const mapElement = document.getElementById("google-map")
     const loadingElement = document.getElementById("map-loading")
-
     if (mapElement && loadingElement) {
-      // Hide loading after a short delay
       setTimeout(() => {
         loadingElement.style.display = "none"
       }, 500)
     }
   }, [property])
 
-  const handleRestrictedAction = (action: string) => {
+  const handleRestrictedAction = (_action: string) => {
     setShowAccessDenied(true)
     setTimeout(() => setShowAccessDenied(false), 4000)
   }
@@ -203,9 +197,9 @@ export default function PropertyPage() {
     let favorites: string[] = savedFavorites ? JSON.parse(savedFavorites) : []
 
     if (isFavorited) {
-      favorites = favorites.filter((id) => id !== params.id)
+      favorites = favorites.filter((fid) => fid !== idStr)
     } else {
-      favorites.push(params.id as string)
+      favorites.push(idStr)
     }
 
     localStorage.setItem("atria-favorites", JSON.stringify(favorites))
@@ -231,12 +225,14 @@ export default function PropertyPage() {
   const sendEmail = () => {
     const subject = encodeURIComponent(`Interesse na propriedade: ${property?.title}`)
     const body = encodeURIComponent(
-      `Olá ${contactData?.name},\n\nTenho interesse na propriedade:\n\nTítulo: ${property?.title}\nCódigo: #${property?.id}\nPreço: ${formatPrice(property?.price || 0)}\n\nGostaria de mais informações.\n\nObrigado!`,
+      `Olá ${contactData?.name},\n\nTenho interesse na propriedade:\n\nTítulo: ${property?.title}\nCódigo: #${property?.id}\nPreço: ${formatPrice(
+        property?.price || 0,
+      )}\n\nGostaria de mais informações.\n\nObrigado!`,
     )
     window.location.href = `mailto:${contactData?.email}?subject=${subject}&body=${body}`
   }
 
-  const showSuccessMessage = (action: string) => {
+  const showSuccessMessage = (_action: string) => {
     setShowContactSuccess(true)
     setTimeout(() => setShowContactSuccess(false), 3000)
   }
@@ -259,20 +255,19 @@ export default function PropertyPage() {
   }
 
   const nextImage = () => {
-    if (property && property.images) {
+    if (property?.images?.length) {
       setCurrentImageIndex((prev) => (prev + 1) % property.images.length)
     }
   }
 
   const prevImage = () => {
-    if (property && property.images) {
+    if (property?.images?.length) {
       setCurrentImageIndex((prev) => (prev - 1 + property.images.length) % property.images.length)
     }
   }
 
   const shareProperty = () => {
     if (!property) return
-
     if (navigator.share) {
       navigator.share({
         title: property.title,
@@ -304,15 +299,15 @@ export default function PropertyPage() {
   }
 
   const images =
-    property && property.images && property.images.length > 0
+    property?.images?.length && property.images.length > 0
       ? property.images
-      : [`/placeholder.svg?height=400&width=600&query=property-${property?.propertyType}`]
+      : [`/placeholder.svg?height=400&width=600&query=property-${property?.propertyType || "default"}`]
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Carregando propriedade...</p>
         </div>
       </div>
@@ -418,7 +413,7 @@ export default function PropertyPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Image Gallery - Always visible */}
+            {/* Image Gallery */}
             <Card className="overflow-hidden">
               <div className="relative h-96">
                 <img
@@ -456,7 +451,7 @@ export default function PropertyPage() {
                     {images.map((image, index) => (
                       <button
                         key={index}
-                        onClick={() => setCurrentImageIndex(index)}
+                        onClick={() => setCurrentImageIndex(Math.min(index, images.length - 1))} // Bounds check
                         className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 ${
                           index === currentImageIndex ? "border-primary" : "border-transparent"
                         }`}
@@ -473,7 +468,7 @@ export default function PropertyPage() {
               )}
             </Card>
 
-            {/* Property Details - Basic info always visible */}
+            {/* Property Details */}
             <Card>
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -492,7 +487,7 @@ export default function PropertyPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Location - Limited for non-contract users */}
+                {/* Location */}
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <MapPin className="h-5 w-5" />
                   <span>
@@ -511,7 +506,7 @@ export default function PropertyPage() {
                   </span>
                 </div>
 
-                {/* Property Stats - Always visible */}
+                {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {property.bedrooms > 0 && (
                     <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
@@ -560,7 +555,7 @@ export default function PropertyPage() {
                   </div>
                 )}
 
-                {/* Description - Always visible */}
+                {/* Description */}
                 {property.description && (
                   <div>
                     <h3 className="font-semibold mb-2">Descrição</h3>
@@ -568,14 +563,14 @@ export default function PropertyPage() {
                   </div>
                 )}
 
-                {/* Features - Always visible */}
-                {property.features.length > 0 && (
+                {/* Features */}
+                {!!property.features?.length && (
                   <div>
                     <h3 className="font-semibold mb-3">Características</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                       {property.features.map((feature) => (
                         <div key={feature} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                          <div className="w-2 h-2 bg-primary rounded-full"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full" />
                           <span className="text-sm">{feature}</span>
                         </div>
                       ))}
@@ -599,13 +594,15 @@ export default function PropertyPage() {
                             className="absolute inset-0 bg-gray-100 rounded-xl flex items-center justify-center z-10"
                           >
                             <div className="text-center">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2" />
                               <p className="text-sm text-gray-600">Carregando mapa...</p>
                             </div>
                           </div>
                           <div id="google-map" className="w-full h-80 rounded-xl overflow-hidden">
                             <iframe
-                              src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dpoWe2_FpKiHs4&q=${encodeURIComponent(locationData?.address || "")}&zoom=16&maptype=roadmap`}
+                              src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dpoWe2_FpKiHs4&q=${encodeURIComponent(
+                                locationData?.address || "",
+                              )}&zoom=16&maptype=roadmap`}
                               width="100%"
                               height="320"
                               style={{ border: 0, borderRadius: "12px" }}
@@ -682,10 +679,12 @@ export default function PropertyPage() {
                         {transportOptions.map((option, index) => (
                           <div
                             key={index}
-                            className={`flex items-center gap-4 p-4 border-2 rounded-xl hover:shadow-md transition-all cursor-pointer border-blue-200 hover:border-blue-300 bg-blue-50/50`}
+                            className="flex items-center gap-4 p-4 border-2 rounded-xl hover:shadow-md transition-all cursor-pointer border-blue-200 hover:border-blue-300 bg-blue-50/50"
                             onClick={() =>
                               window.open(
-                                `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(locationData?.address || "")}`,
+                                `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                                  locationData?.address || "",
+                                )}`,
                                 "_blank",
                               )
                             }
@@ -794,7 +793,7 @@ export default function PropertyPage() {
                       {property.ownerName
                         ? property.ownerName
                             .split(" ")
-                            .map((n) => n[0])
+                            .map((n: string) => n[0])
                             .join("")
                             .slice(0, 2)
                         : "??"}
@@ -871,7 +870,7 @@ export default function PropertyPage() {
               </CardContent>
             </Card>
 
-            {/* Send Proposal - Always available */}
+            {/* Send Proposal */}
             <Card>
               <CardHeader>
                 <CardTitle>Interessado?</CardTitle>
@@ -886,7 +885,7 @@ export default function PropertyPage() {
               </CardContent>
             </Card>
 
-            {/* Property Info - Always visible */}
+            {/* Property Info */}
             <Card>
               <CardHeader>
                 <CardTitle>Informações da Propriedade</CardTitle>
@@ -918,7 +917,6 @@ export default function PropertyPage() {
 
       <PropertyProposalForm open={isProposalFormOpen} onOpenChange={setIsProposalFormOpen} property={property} />
 
-      {/* ContractRequestModal component */}
       {property && currentUser && (
         <ContractRequestModal
           isOpen={isContractRequestOpen}

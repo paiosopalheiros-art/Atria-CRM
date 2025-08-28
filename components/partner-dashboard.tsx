@@ -314,7 +314,7 @@ function PartnerDashboard({ user, onLogout }: PartnerDashboardProps) {
   }
 
   const handleShareProperty = (property: Property) => {
-    const shareUrl = `${window.location.origin}/property/${property.id}`
+    const shareUrl = `${window.location.origin}/properties/${property.id}`
     navigator.clipboard.writeText(shareUrl)
     alert("Link copiado para a área de transferência!")
   }

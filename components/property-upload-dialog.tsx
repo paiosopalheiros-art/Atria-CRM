@@ -12,6 +12,8 @@ import { Upload, X, Plus } from "lucide-react"
 import { ContractCreationDialog } from "@/components/contract-creation-dialog"
 import type { Contract } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
+// [CREDITOS] Import credit system helpers
+import { getPropertyCreditCost, spendCreditsClient, type PropertySource, type PropertyTier } from "@/lib/utils"
 
 export interface Property {
   id: string
@@ -37,6 +39,8 @@ export interface Property {
   createdAt: string
   status: "available" | "reserved" | "sold"
   approvalStatus: "pending" | "approved" | "rejected" // Added approval status for moderation
+  source: PropertySource
+  tier: PropertyTier
 }
 
 interface PropertyUploadDialogProps {
@@ -71,6 +75,9 @@ export function PropertyUploadDialog({
     zipCode: "",
     images: [] as string[],
     features: [] as string[],
+    // [CREDITOS] Add source and tier fields
+    source: "user" as PropertySource,
+    tier: "baixo" as PropertyTier,
   })
   const [newFeature, setNewFeature] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -92,6 +99,38 @@ export function PropertyUploadDialog({
     try {
       const supabase = createClient()
 
+      // [CREDITOS] Check credits before publishing
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        alert("Usuário não autenticado")
+        setIsLoading(false)
+        return
+      }
+
+      const cost = getPropertyCreditCost({ source: formData.source, tier: formData.tier })
+      console.log("[v0] Property publishing cost:", { source: formData.source, tier: formData.tier, cost })
+
+      const creditResult = await spendCreditsClient({
+        supabase,
+        userId: user.id,
+        amount: cost,
+        reason: "publicar_imovel",
+        meta: {
+          title: formData.title,
+          source: formData.source,
+          tier: formData.tier,
+          propertyType: formData.propertyType,
+        },
+      })
+
+      if (!creditResult.ok) {
+        alert(`Saldo insuficiente para publicar. Você precisa de ${cost} créditos. ${creditResult.error || ""}`)
+        setIsLoading(false)
+        return
+      }
+
       // Get user profile for any additional data if needed
       const { data: userProfile } = await supabase
         .from("user_profiles")
@@ -112,6 +151,9 @@ export function PropertyUploadDialog({
         status: "available",
         user_id: userId,
         user_name: userName,
+        // [CREDITOS] Include source and tier in property creation
+        source: formData.source,
+        tier: formData.tier,
       })
 
       const { data: property, error: propertyError } = await supabase
@@ -127,6 +169,9 @@ export function PropertyUploadDialog({
           zip_code: formData.zipCode,
           agency_id: userProfile?.agency_id || null,
           status: "available",
+          // [CREDITOS] Include source and tier in database insert
+          source: formData.source,
+          tier: formData.tier,
         })
         .select()
         .single()
@@ -143,18 +188,6 @@ export function PropertyUploadDialog({
         created_at: property.created_at,
         full_property: property,
       })
-
-      const { data: verifyProperty, error: verifyError } = await supabase
-        .from("properties")
-        .select("id, title, status, created_at")
-        .eq("id", property.id)
-        .single()
-
-      if (verifyError) {
-        console.error("[v0] Error verifying property:", verifyError)
-      } else {
-        console.log("[v0] Property verification after creation:", verifyProperty)
-      }
 
       const uploadedImages = []
       for (const imageUrl of formData.images) {
@@ -192,13 +225,16 @@ export function PropertyUploadDialog({
         ownerName: userName,
         userId: userId,
         status: "available",
+        source: formData.source,
+        tier: formData.tier,
       }
 
       onAddProperty(propertyForCallback)
       setCreatedPropertyId(property.id)
 
+      // [CREDITOS] Show success message with credit cost
       const createContract = confirm(
-        "Propriedade adicionada com sucesso! Deseja criar um contrato de comissão para esta propriedade?",
+        `Propriedade publicada com sucesso! (-${cost} créditos)\n\nDeseja criar um contrato de comissão para esta propriedade?`,
       )
       if (createContract) {
         setShowContractDialog(true)
@@ -248,6 +284,9 @@ export function PropertyUploadDialog({
       zipCode: "",
       images: [],
       features: [],
+      // [CREDITOS] Reset source and tier
+      source: "user",
+      tier: "baixo",
     })
   }
 
@@ -349,6 +388,51 @@ export function PropertyUploadDialog({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* [CREDITOS] Add source and tier selection */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="source">Origem da Propriedade</Label>
+                <Select
+                  value={formData.source}
+                  onValueChange={(value: PropertySource) => setFormData({ ...formData, source: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a origem" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">Usuário (5-15 créditos)</SelectItem>
+                    <SelectItem value="creci">CRECI (3 créditos)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {formData.source === "user" && (
+                <div className="space-y-2">
+                  <Label htmlFor="tier">Categoria do Imóvel</Label>
+                  <Select
+                    value={formData.tier}
+                    onValueChange={(value: PropertyTier) => setFormData({ ...formData, tier: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="baixo">Baixo (5 créditos)</SelectItem>
+                      <SelectItem value="medio">Médio (10 créditos)</SelectItem>
+                      <SelectItem value="luxo">Luxo (15 créditos)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            {/* [CREDITOS] Show cost preview */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm text-blue-800">
+                <strong>Custo para publicar:</strong>{" "}
+                {getPropertyCreditCost({ source: formData.source, tier: formData.tier })} créditos
+              </p>
             </div>
 
             <div className="space-y-2">

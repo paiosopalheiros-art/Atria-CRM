@@ -21,98 +21,65 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     checkAuth()
+  }, [])
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("[v0] Auth state changed:", event, session?.user?.email)
-      if (session?.user) {
+  const checkAuth = async () => {
+    try {
+      console.log("[v0] Starting real Supabase auth check...")
+
+      const supabase = createClient()
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession()
+
+      if (error) {
+        console.error("[v0] Auth check error:", error)
+        setUser(null)
+      } else if (session?.user) {
+        console.log("[v0] Found real session:", session.user.email)
         setUser({
           id: session.user.id,
           email: session.user.email || "",
         })
       } else {
+        console.log("[v0] No session found")
         setUser(null)
-      }
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const checkAuth = async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      console.log("[v0] Current session:", session?.user?.email)
-
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || "",
-        })
       }
     } catch (error) {
       console.error("[v0] Auth check failed:", error)
+      setUser(null)
     } finally {
+      console.log("[v0] Auth check completed, setting loading to false")
       setLoading(false)
     }
   }
 
   const login = async (email: string, password: string) => {
     try {
-      console.log("[v0] Attempting login for:", email)
+      console.log("[v0] Attempting real Supabase login for:", email)
+
+      const supabase = createClient()
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) {
-        console.error("[v0] Login error:", error.message)
-
-        if (error.message === "Invalid login credentials") {
-          console.log("[v0] Attempting auto-registration for existing user:", email)
-
-          try {
-            const response = await fetch("/api/auth/auto-register", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, password }),
-            })
-
-            if (response.ok) {
-              console.log("[v0] Auto-registration successful, retrying login")
-              // Retry login after successful auto-registration
-              const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-              })
-
-              if (retryError) {
-                throw new Error(retryError.message)
-              }
-
-              console.log("[v0] Login successful after auto-registration:", retryData.user?.email)
-              return
-            } else {
-              const errorData = await response.json()
-              console.log("[v0] Auto-registration failed:", errorData.error)
-            }
-          } catch (autoRegError) {
-            console.error("[v0] Auto-registration error:", autoRegError)
-          }
-        }
-
+        console.error("[v0] Login error:", error)
         throw new Error(error.message)
       }
 
-      console.log("[v0] Login successful:", data.user?.email)
-      // User will be set via onAuthStateChange
+      if (data.user) {
+        console.log("[v0] Login successful:", data.user.email)
+        setUser({
+          id: data.user.id,
+          email: data.user.email || "",
+        })
+      }
     } catch (error) {
       console.error("[v0] Login failed:", error)
       throw error
@@ -121,41 +88,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string, userData: any) => {
     try {
-      console.log("[v0] Attempting registration for:", email)
+      console.log("[v0] Attempting real Supabase registration for:", email)
 
-      // Validate invite code
-      const VALID_INVITE_CODES = {
-        ADMIN2024: "admin",
-        PARTNER2024: "partner",
-        CAPTADOR2024: "captador",
-      }
-
-      const userType = VALID_INVITE_CODES[userData.inviteCode as keyof typeof VALID_INVITE_CODES]
-      if (!userType) {
-        throw new Error("Código de convite inválido")
-      }
-
+      const supabase = createClient()
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || window.location.origin,
-          data: {
-            full_name: userData.fullName,
-            phone: userData.phone || null,
-            creci: userData.creci || null,
-            invite_code: userData.inviteCode,
-          },
         },
       })
 
       if (error) {
-        console.error("[v0] Registration error:", error.message)
+        console.error("[v0] Registration error:", error)
         throw new Error(error.message)
       }
 
-      console.log("[v0] Registration successful:", data.user?.email)
-      // Profile will be created automatically by the database trigger
+      if (data.user) {
+        console.log("[v0] Registration successful:", data.user.email)
+        setUser({
+          id: data.user.id,
+          email: data.user.email || "",
+        })
+      }
     } catch (error) {
       console.error("[v0] Registration failed:", error)
       throw error
@@ -164,14 +119,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log("[v0] Logging out user")
+      console.log("[v0] Real Supabase logout")
+
+      const supabase = createClient()
       const { error } = await supabase.auth.signOut()
+
       if (error) {
-        console.error("[v0] Logout error:", error.message)
+        console.error("[v0] Logout error:", error)
       }
-      // User will be cleared via onAuthStateChange
+
+      setUser(null)
     } catch (error) {
       console.error("[v0] Logout error:", error)
+      setUser(null)
     }
   }
 

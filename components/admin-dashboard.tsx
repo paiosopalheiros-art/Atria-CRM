@@ -25,7 +25,7 @@ import AIAssistant from "./ai-assistant"
 import type { Property } from "./property-upload-dialog"
 import type { Proposal } from "./property-proposal-form"
 import type { User } from "@/app/page"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 import SubscriptionManager from "./subscription-manager"
 import RankingLeaderboard from "./ranking-leaderboard"
@@ -51,7 +51,6 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   >([])
   const [loading, setLoading] = useState(false)
   const [publications, setPublications] = useState<any[]>([])
-  // const supabase = useSupabaseClient()
 
   useEffect(() => {
     loadUsersFromSupabase()
@@ -60,27 +59,24 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
   const loadDataFromSupabase = async () => {
     try {
-      console.log("[v0] Loading all data from Supabase...")
+      console.log("[v0] Loading real data from Supabase...")
+      setLoading(true)
+
+      const supabase = createClient()
 
       const { data: publicationsData, error: publicationsError } = await supabase
-        .from("publications")
+        .from("properties")
         .select("*")
-        .eq("listing_type", "sale") // Only show sale properties
         .order("created_at", { ascending: false })
 
       if (publicationsError) {
         console.error("[v0] Error loading publications:", publicationsError)
+        addNotification("Erro ao carregar publicações", "warning")
       } else {
-        console.log("[v0] Loaded publications:", publicationsData?.length || 0)
-        // Mark ATS properties as auto-approved in the UI
-        const formattedPublications = (publicationsData || []).map((pub) => ({
-          ...pub,
-          auto_approved: pub.source === "creci", // ATS properties are auto-approved
-        }))
-        setPublications(formattedPublications)
+        console.log("[v0] Publications loaded:", publicationsData?.length || 0)
+        setPublications(publicationsData || [])
       }
 
-      // Load properties
       const { data: propertiesData, error: propertiesError } = await supabase
         .from("properties")
         .select("*")
@@ -88,21 +84,10 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
       if (propertiesError) {
         console.error("[v0] Error loading properties:", propertiesError)
+        addNotification("Erro ao carregar propriedades", "warning")
       } else {
-        const formattedProperties =
-          propertiesData?.map((prop) => ({
-            id: prop.id,
-            title: prop.title,
-            description: prop.description,
-            price: prop.price,
-            location: prop.location,
-            type: prop.property_type,
-            status: prop.status,
-            images: prop.images || [],
-            createdAt: prop.created_at,
-            userId: prop.user_id,
-          })) || []
-        setProperties(formattedProperties)
+        console.log("[v0] Properties loaded:", propertiesData?.length || 0)
+        setProperties(propertiesData || [])
       }
 
       const { data: proposalsData, error: proposalsError } = await supabase
@@ -112,32 +97,12 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
       if (proposalsError) {
         console.error("[v0] Error loading proposals:", proposalsError)
+        addNotification("Erro ao carregar propostas", "warning")
       } else {
-        // Create a map of property IDs to titles for quick lookup
-        const propertyTitleMap = new Map()
-        if (propertiesData) {
-          propertiesData.forEach((prop) => {
-            propertyTitleMap.set(prop.id, prop.title)
-          })
-        }
-
-        const formattedProposals =
-          proposalsData?.map((proposal) => ({
-            id: proposal.id,
-            propertyId: proposal.property_id,
-            propertyTitle: propertyTitleMap.get(proposal.property_id) || "Propriedade",
-            clientName: proposal.client_name,
-            clientEmail: proposal.client_email,
-            clientPhone: proposal.client_phone,
-            proposedPrice: proposal.proposed_price,
-            message: proposal.message,
-            status: proposal.status,
-            createdAt: proposal.created_at,
-          })) || []
-        setProposals(formattedProposals)
+        console.log("[v0] Proposals loaded:", proposalsData?.length || 0)
+        setProposals(proposalsData || [])
       }
 
-      // Load invite codes
       const { data: inviteCodesData, error: inviteCodesError } = await supabase
         .from("invite_codes")
         .select("*")
@@ -145,103 +110,69 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
       if (inviteCodesError) {
         console.error("[v0] Error loading invite codes:", inviteCodesError)
-        // Set default codes if none exist
-        const defaultCodes = [
-          { id: "1", code: "ADMIN2024", type: "admin" as const, used: false, createdAt: new Date().toISOString() },
-          { id: "2", code: "PARTNER2024", type: "partner" as const, used: false, createdAt: new Date().toISOString() },
-          { id: "3", code: "CAPTADOR2024", type: "partner" as const, used: false, createdAt: new Date().toISOString() },
-        ]
-        setInviteCodes(defaultCodes)
+        addNotification("Erro ao carregar códigos de convite", "warning")
       } else {
-        const formattedCodes =
-          inviteCodesData?.map((code) => ({
-            id: code.id,
-            code: code.code,
-            type: code.user_type,
-            used: code.is_used,
-            createdAt: code.created_at,
-          })) || []
-        setInviteCodes(formattedCodes)
+        console.log("[v0] Invite codes loaded:", inviteCodesData?.length || 0)
+        setInviteCodes(inviteCodesData || [])
       }
 
-      // Load activity logs
       const { data: activityLogsData, error: activityLogsError } = await supabase
         .from("activity_logs")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(100)
+        .limit(50)
 
       if (activityLogsError) {
         console.error("[v0] Error loading activity logs:", activityLogsError)
+        addNotification("Erro ao carregar logs de atividade", "warning")
       } else {
-        const formattedLogs =
-          activityLogsData?.map((log) => ({
-            id: log.id,
-            action: log.action,
-            user: log.user_name,
-            timestamp: log.created_at,
-            details: log.details,
-          })) || []
-        setActivityLogs(formattedLogs)
+        console.log("[v0] Activity logs loaded:", activityLogsData?.length || 0)
+        setActivityLogs(activityLogsData || [])
       }
 
-      // Load notifications
       const { data: notificationsData, error: notificationsError } = await supabase
         .from("notifications")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(50)
+        .limit(20)
 
       if (notificationsError) {
         console.error("[v0] Error loading notifications:", notificationsError)
       } else {
-        const formattedNotifications =
-          notificationsData?.map((notif) => ({
-            id: notif.id,
-            message: notif.message,
-            type: notif.type,
-            timestamp: notif.created_at,
-          })) || []
-        setNotifications(formattedNotifications)
+        console.log("[v0] Notifications loaded:", notificationsData?.length || 0)
+        setNotifications(notificationsData || [])
       }
 
-      console.log("[v0] All data loaded from Supabase successfully")
+      console.log("[v0] All real data loaded successfully from Supabase")
     } catch (error) {
       console.error("[v0] Error loading data from Supabase:", error)
       addNotification("Erro ao carregar dados do sistema", "warning")
+    } finally {
+      setLoading(false)
     }
   }
 
   const loadUsersFromSupabase = async () => {
     try {
-      console.log("[v0] Loading users from API...")
-      const response = await fetch("/api/admin/users")
+      console.log("[v0] Loading real users from Supabase...")
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("[v0] Error loading users:", errorData.error)
-        addNotification(`Erro ao carregar usuários: ${errorData.error}`, "warning")
-        return
+      const supabase = createClient()
+      const { data: usersData, error } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("[v0] Error loading users:", error)
+        addNotification("Erro ao carregar usuários", "warning")
+      } else {
+        console.log("[v0] Users loaded:", usersData?.length || 0)
+        setUsers(usersData || [])
       }
-
-      const { users: authUsers } = await response.json()
-
-      const formattedUsers: User[] = authUsers.map((authUser: any) => ({
-        id: authUser.id,
-        email: authUser.email || "",
-        fullName: authUser.user_metadata?.full_name || authUser.email?.split("@")[0] || "Usuário",
-        userType: authUser.email?.includes("admin") ? "admin" : "partner",
-        isActive: true,
-        createdAt: authUser.created_at,
-        creci: authUser.user_metadata?.creci || null,
-      }))
-
-      setUsers(formattedUsers)
-      console.log("[v0] Loaded users:", formattedUsers.length)
     } catch (error) {
-      console.error("[v0] Error loading users:", error)
-      addNotification("Erro interno ao carregar usuários", "warning")
+      console.error("[v0] Error loading users from Supabase:", error)
+      addNotification("Erro ao carregar usuários", "warning")
     }
   }
 
@@ -310,7 +241,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     }
 
     try {
-      const { data, error } = await supabase.from("activity_logs").insert([newLog]).select()
+      const { data, error } = await createClient().from("activity_logs").insert([newLog]).select()
 
       if (error) {
         console.error("[v0] Error saving activity log:", error)
@@ -337,7 +268,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     }
 
     try {
-      const { data, error } = await supabase.from("notifications").insert([newNotification]).select()
+      const { data, error } = await createClient().from("notifications").insert([newNotification]).select()
 
       if (error) {
         console.error("[v0] Error saving notification:", error)
@@ -365,7 +296,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         return
       }
 
-      const { error } = await supabase.from("properties").delete().eq("id", propertyId)
+      const { error } = await createClient().from("properties").delete().eq("id", propertyId)
 
       if (error) {
         console.error("[v0] Error deleting property:", error)
@@ -394,7 +325,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     }
 
     try {
-      const { data, error } = await supabase.from("invite_codes").insert([newCode]).select()
+      const { data, error } = await createClient().from("invite_codes").insert([newCode]).select()
 
       if (error) {
         console.error("[v0] Error creating invite code:", error)
@@ -421,7 +352,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
   const deactivateInviteCode = async (codeId: string) => {
     try {
-      const { error } = await supabase.from("invite_codes").update({ is_used: true }).eq("id", codeId)
+      const { error } = await createClient().from("invite_codes").update({ is_used: true }).eq("id", codeId)
 
       if (error) {
         console.error("[v0] Error deactivating invite code:", error)
@@ -447,7 +378,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const totalViews = properties.reduce((acc, p, index) => acc + (100 + index * 15), 0)
 
   const handleShareProperty = (property: Property) => {
-    const shareUrl = `${window.location.origin}/property/${property.id}`
+    const shareUrl = `${window.location.origin}/properties/${property.id}`
     navigator.clipboard.writeText(shareUrl)
     alert("Link copiado para a área de transferência!")
   }

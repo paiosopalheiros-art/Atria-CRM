@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server"
-import { ApiResponseHelper } from "@/lib/api-response"
-import { AuthService } from "@/lib/auth"
-import { supabase } from "@/lib/supabase/client"
+import { NextResponse } from "next/server"
+import { createServerSupabase } from "@/lib/supabase/server"
 
 const VALID_INVITE_CODES = {
   ADMIN2024: "admin",
@@ -15,58 +14,47 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!inviteCode || !fullName || !email || !password) {
-      return ApiResponseHelper.error("Campos obrigatórios não preenchidos")
+      return NextResponse.json({ error: "Campos obrigatórios não preenchidos" }, { status: 400 })
     }
 
     // Validate invite code
     const userType = VALID_INVITE_CODES[inviteCode as keyof typeof VALID_INVITE_CODES]
     if (!userType) {
-      return ApiResponseHelper.error("Código de convite inválido")
+      return NextResponse.json({ error: "Código de convite inválido" }, { status: 400 })
     }
 
-    // Check if email already exists
-    const { data: existingUser, error: checkError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .limit(1)
+    const supabase = await createServerSupabase()
 
-    if (existingUser && existingUser.length > 0) {
-      return ApiResponseHelper.error("Email já cadastrado")
-    }
-
-    // Create user
-    const newUser = await AuthService.createUser({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      fullName,
-      userType,
-      inviteCode,
-      cpf,
-      rg,
-      creci,
-      phone,
-      address,
-    })
-
-    // Generate token
-    const token = AuthService.generateToken({
-      userId: newUser.id,
-      email: newUser.email,
-      userType: newUser.user_type,
-    })
-
-    return ApiResponseHelper.success({
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        fullName: newUser.full_name,
-        userType: newUser.user_type,
+      options: {
+        emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${request.nextUrl.origin}`,
+        data: {
+          full_name: fullName,
+          phone: phone || null,
+          creci: creci || null,
+          invite_code: inviteCode,
+          user_type: userType,
+        },
       },
-      token,
+    })
+
+    if (error) {
+      console.error("Registration error:", error.message)
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    if (!data.user) {
+      return NextResponse.json({ error: "Falha no registro" }, { status: 400 })
+    }
+
+    return NextResponse.json({
+      id: data.user.id,
+      email: data.user.email,
     })
   } catch (error) {
     console.error("Registration error:", error)
-    return ApiResponseHelper.serverError("Erro interno do servidor")
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }

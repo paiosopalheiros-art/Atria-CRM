@@ -1,15 +1,25 @@
 import { createBrowserClient } from "@supabase/ssr"
 
-// Check if Supabase environment variables are available
-export const isSupabaseConfigured =
-  typeof process.env.NEXT_PUBLIC_SUPABASE_URL === "string" &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL.length > 0 &&
-  typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === "string" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length > 0
-
 export function createClient() {
-  return createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  console.log("[v0] Supabase client config:", {
+    url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : "UNDEFINED",
+    key: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : "UNDEFINED",
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+  })
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("[v0] Missing Supabase environment variables:", {
+      NEXT_PUBLIC_SUPABASE_URL: !!supabaseUrl,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: !!supabaseAnonKey,
+    })
+    throw new Error("Missing Supabase environment variables")
+  }
+
+  return createBrowserClient(supabaseUrl, supabaseAnonKey)
 }
 
-// Create a singleton instance of the Supabase client for Client Components
 export const supabase = createClient()

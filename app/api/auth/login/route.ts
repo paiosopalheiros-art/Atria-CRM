@@ -1,37 +1,37 @@
 import type { NextRequest } from "next/server"
-import { ApiResponseHelper } from "@/lib/api-response"
-import { AuthService } from "@/lib/auth"
+import { NextResponse } from "next/server"
+import { createServerSupabase } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
 
     if (!email || !password) {
-      return ApiResponseHelper.error("Email e senha são obrigatórios")
+      return NextResponse.json({ error: "Email e senha são obrigatórios" }, { status: 400 })
     }
 
-    const user = await AuthService.authenticateUser(email, password)
-    if (!user) {
-      return ApiResponseHelper.error("Credenciais inválidas", 401)
-    }
+    const supabase = await createServerSupabase()
 
-    const token = AuthService.generateToken({
-      userId: user.id,
-      email: user.email,
-      userType: user.user_type,
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     })
 
-    return ApiResponseHelper.success({
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.full_name,
-        userType: user.user_type,
-      },
-      token,
+    if (error) {
+      console.error("Login error:", error.message)
+      return NextResponse.json({ error: "Credenciais inválidas" }, { status: 401 })
+    }
+
+    if (!data.user) {
+      return NextResponse.json({ error: "Falha na autenticação" }, { status: 401 })
+    }
+
+    return NextResponse.json({
+      id: data.user.id,
+      email: data.user.email,
     })
   } catch (error) {
     console.error("Login error:", error)
-    return ApiResponseHelper.serverError("Erro interno do servidor")
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }

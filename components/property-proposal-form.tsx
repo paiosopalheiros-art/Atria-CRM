@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Send, User, DollarSign } from "lucide-react"
 import type { Property } from "./property-upload-dialog"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client" // Fixed import to use createClient
+import { getPropertyCreditCost, spendCreditsClient, type PropertySource, type PropertyTier } from "@/lib/utils"
 
 interface PropertyProposalFormProps {
   open: boolean
@@ -61,6 +62,53 @@ export function PropertyProposalForm({ open, onOpenChange, property }: PropertyP
     }
 
     try {
+      const supabase = createClient()
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        alert("Usuário não autenticado")
+        setIsLoading(false)
+        return
+      }
+
+      let src: PropertySource = property?.source ?? "user"
+      let tier: PropertyTier = property?.tier ?? "medio"
+
+      if (!property?.source || !property?.tier) {
+        const { data: p } = await supabase
+          .from("properties")
+          .select("source, tier")
+          .eq("id", property?.id)
+          .maybeSingle()
+        src = (p?.source as PropertySource) || src
+        tier = (p?.tier as PropertyTier) || tier
+      }
+
+      const cost = getPropertyCreditCost({ source: src, tier })
+      console.log("[v0] Proposal submission cost:", { source: src, tier, cost })
+
+      const creditResult = await spendCreditsClient({
+        supabase,
+        userId: user.id,
+        amount: cost,
+        reason: "aplicar_venda",
+        propertyId: property?.id,
+        meta: {
+          form: formData,
+          source: src,
+          tier,
+          propertyTitle: property.title,
+        },
+      })
+
+      if (!creditResult.ok) {
+        alert(`Saldo insuficiente para aplicar. Você precisa de ${cost} créditos. ${creditResult.error || ""}`)
+        setIsLoading(false)
+        return
+      }
+
       const proposalData = {
         property_id: property.id,
         client_name: formData.clientName,
@@ -84,7 +132,7 @@ export function PropertyProposalForm({ open, onOpenChange, property }: PropertyP
       }
 
       console.log("[v0] Proposal created successfully:", data)
-      alert("Proposta enviada com sucesso! O corretor entrará em contato em breve.")
+      alert(`Proposta enviada com sucesso! (-${cost} créditos)\n\nO corretor entrará em contato em breve.`)
       onOpenChange(false)
 
       // Reset form
@@ -113,6 +161,11 @@ export function PropertyProposalForm({ open, onOpenChange, property }: PropertyP
     }).format(price)
   }
 
+  const proposalCost = getPropertyCreditCost({
+    source: property?.source ?? "user",
+    tier: property?.tier ?? "medio",
+  })
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -127,7 +180,9 @@ export function PropertyProposalForm({ open, onOpenChange, property }: PropertyP
         <div className="p-4 bg-gray-50 rounded-lg mb-4">
           <div className="flex items-center gap-4">
             <img
-              src={property.images[0] || `/placeholder.svg?height=80&width=120&query=property-${property.propertyType}`}
+              src={
+                property.images?.[0] || `/placeholder.svg?height=80&width=120&query=property-${property.propertyType}`
+              }
               alt={property.title}
               className="w-20 h-16 object-cover rounded"
             />
@@ -139,6 +194,12 @@ export function PropertyProposalForm({ open, onOpenChange, property }: PropertyP
               <p className="text-lg font-bold text-primary">{formatPrice(property.price)}</p>
             </div>
           </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p className="text-sm text-blue-800">
+            <strong>Custo para aplicar:</strong> {proposalCost} créditos
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">

@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+
 import {
   User,
   Download,
@@ -27,6 +28,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react"
+
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
 
@@ -35,16 +37,23 @@ interface UserSettingsModalProps {
   onOpenChange: (open: boolean) => void
 }
 
+type ActivityRow = {
+  action: string
+  description: string
+  created_at: string
+}
+
 export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps) {
   const { user } = useAuth()
+  const supabase = createClient()
+
   const [loading, setLoading] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string>("")
   const [showPassword, setShowPassword] = useState(false)
-  const [activities, setActivities] = useState<any[]>([])
+  const [activities, setActivities] = useState<ActivityRow[]>([])
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [avatarUploadEnabled, setAvatarUploadEnabled] = useState(false)
-  const supabase = createClient()
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -75,10 +84,12 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
       errors.fullName = "Nome completo é obrigatório"
     }
 
+    // Fixed regex: (11) 99999-9999 or (11) 9999-9999
     if (formData.phone && !/^$$\d{2}$$\s\d{4,5}-\d{4}$/.test(formData.phone)) {
       errors.phone = "Formato inválido. Use: (11) 99999-9999"
     }
 
+    // 123456-F
     if (formData.creci && !/^\d{5,6}-[A-Z]$/.test(formData.creci)) {
       errors.creci = "Formato inválido. Use: 123456-F"
     }
@@ -95,12 +106,14 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
     return Object.keys(errors).length === 0
   }
 
+  // ------------ effects ------------
   useEffect(() => {
     if (user && open) {
       loadUserProfile()
       loadRecentActivities()
       checkAvatarUploadAvailability()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, open])
 
   const checkAvatarUploadAvailability = async () => {
@@ -118,7 +131,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
       }
 
       setAvatarUploadEnabled(false)
-      console.log("[v0] Avatar upload disabled - no suitable storage bucket found")
+      console.warn("[v0] Avatar upload disabled - no suitable storage bucket found")
     } catch (error) {
       console.error("[v0] Error checking avatar upload availability:", error)
       setAvatarUploadEnabled(false)
@@ -129,15 +142,13 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
     if (!user) return
 
     try {
-      console.log("[v0] Loading user profile data...")
-
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile, error } = await supabase
         .from("user_profiles")
         .select("full_name, email, phone, creci, bio, avatar_url")
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle() // Use maybeSingle to avoid errors when no profile exists
 
-      if (profile && !profileError) {
+      if (!error && profile) {
         setFormData((prev) => ({
           ...prev,
           fullName: profile.full_name || "",
@@ -148,6 +159,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
         }))
         setAvatarUrl(profile.avatar_url || "")
       } else {
+        // fallback inicial com dados do auth
         setFormData((prev) => ({
           ...prev,
           fullName: user.user_metadata?.full_name || "",
@@ -162,8 +174,8 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
       if (savedNotifications) {
         setNotifications(JSON.parse(savedNotifications))
       }
-    } catch (error) {
-      console.error("[v0] Error loading user profile:", error)
+    } catch (err) {
+      console.error("[v0] Error loading user profile:", err)
     }
   }
 
@@ -179,8 +191,8 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
         .limit(10)
 
       setActivities(logs || [])
-    } catch (error) {
-      console.error("[v0] Error loading activities:", error)
+    } catch (err) {
+      console.error("[v0] Error loading activities:", err)
     }
   }
 
@@ -200,87 +212,57 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
 
     setUploadingAvatar(true)
     try {
-      console.log("[v0] Uploading avatar...")
+      const ext = (file.name.split(".").pop() || "png").toLowerCase()
+      const path = `avatars/${user.id}/${Date.now()}.${ext}`
 
-      const fileExt = file.name.split(".").pop()
-      const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`
-
-      let uploadData, uploadError, publicUrl
-
-      const { data: avatarUpload, error: avatarError } = await supabase.storage.from("avatars").upload(fileName, file, {
+      // Try avatars bucket first; fallback to property-images/avatars/
+      const tryAvatars = await supabase.storage.from("avatars").upload(path.replace(/^avatars\//, ""), file, {
         upsert: true,
         cacheControl: "3600",
       })
 
-      if (avatarError && avatarError.message.includes("Bucket not found")) {
-        console.log("[v0] Avatars bucket not found, using property-images as fallback...")
+      let publicUrl: string | undefined
 
-        const { data: fallbackUpload, error: fallbackError } = await supabase.storage
-          .from("property-images")
-          .upload(`avatars/${fileName}`, file, {
-            upsert: true,
-            cacheControl: "3600",
-          })
-
-        if (fallbackError) {
-          throw new Error(`Erro no upload: ${fallbackError.message}`)
-        }
-
-        uploadData = fallbackUpload
-        const { data: urlData } = supabase.storage.from("property-images").getPublicUrl(`avatars/${fileName}`)
-        publicUrl = urlData?.publicUrl
-      } else if (avatarError) {
-        throw new Error(`Erro no upload: ${avatarError.message}`)
-      } else {
-        uploadData = avatarUpload
-        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName)
-        publicUrl = urlData?.publicUrl
-      }
-
-      if (!publicUrl) {
-        throw new Error("Erro ao gerar URL pública da imagem")
-      }
-
-      const { data: existingProfile } = await supabase
-        .from("user_profiles")
-        .select("id")
-        .eq("user_id", user.id)
-        .single()
-
-      const profileData = {
-        avatar_url: publicUrl,
-        updated_at: new Date().toISOString(),
-      }
-
-      let updateError
-      if (existingProfile) {
-        const { error } = await supabase.from("user_profiles").update(profileData).eq("user_id", user.id)
-        updateError = error
-      } else {
-        const { error } = await supabase.from("user_profiles").insert({
-          user_id: user.id,
-          ...profileData,
-          full_name: formData.fullName || user.user_metadata?.full_name || "",
-          email: user.email || "",
-          created_at: new Date().toISOString(),
+      if (tryAvatars.error) {
+        console.warn("[v0] Avatars bucket not available, using property-images fallback")
+        // fallback to property-images bucket
+        const up2 = await supabase.storage.from("property-images").upload(path, file, {
+          upsert: true,
+          cacheControl: "3600",
         })
-        updateError = error
+        if (up2.error) throw up2.error
+
+        const { data: urlData } = supabase.storage.from("property-images").getPublicUrl(path)
+        publicUrl = urlData?.publicUrl
+      } else {
+        const p2 = path.replace(/^avatars\//, "") // in "avatars" bucket use root
+        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(p2)
+        publicUrl = urlData?.publicUrl
       }
 
-      if (updateError) {
-        console.error("[v0] Profile update error:", updateError)
-        throw new Error(`Erro ao atualizar perfil: ${updateError.message}`)
-      }
+      if (!publicUrl) throw new Error("Erro ao gerar URL pública da imagem")
+
+      const { error: upErr } = await supabase.from("user_profiles").upsert(
+        {
+          user_id: user.id,
+          avatar_url: publicUrl,
+          full_name: formData.fullName || user.user_metadata?.full_name || "",
+          email: formData.email || user.email || "",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      )
+
+      if (upErr) throw upErr
 
       setAvatarUrl(publicUrl)
-      console.log("[v0] Avatar uploaded successfully")
       alert("Avatar atualizado com sucesso!")
-    } catch (error) {
-      console.error("[v0] Avatar upload error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
-      alert(`Erro ao fazer upload da imagem: ${errorMessage}`)
+    } catch (err: any) {
+      console.error("[v0] Avatar upload error:", err)
+      alert(`Erro ao fazer upload da imagem: ${err?.message || "Erro desconhecido"}`)
     } finally {
       setUploadingAvatar(false)
+      event.currentTarget.value = ""
     }
   }
 
@@ -289,8 +271,6 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
 
     setLoading(true)
     try {
-      console.log("[v0] Saving user profile...")
-
       const profileData = {
         user_id: user.id,
         full_name: formData.fullName,
@@ -299,26 +279,18 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
         creci: formData.creci,
         bio: formData.bio,
         updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString(), // Will be ignored on UPDATE due to ON CONFLICT
       }
 
       const { error } = await supabase.from("user_profiles").upsert(profileData, {
         onConflict: "user_id",
-        ignoreDuplicates: false,
       })
-
-      if (error) {
-        throw error
-      }
+      if (error) throw error
 
       if (formData.newPassword) {
         const { error: passwordError } = await supabase.auth.updateUser({
           password: formData.newPassword,
         })
-
-        if (passwordError) {
-          throw passwordError
-        }
+        if (passwordError) throw passwordError
 
         setFormData((prev) => ({
           ...prev,
@@ -337,12 +309,11 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
         created_at: new Date().toISOString(),
       })
 
-      console.log("[v0] Profile saved successfully")
       alert("Perfil atualizado com sucesso!")
       onOpenChange(false)
-    } catch (error) {
-      console.error("[v0] Error saving profile:", error)
-      alert("Erro ao salvar perfil. Tente novamente.")
+    } catch (err: any) {
+      console.error("[v0] Error saving profile:", err)
+      alert(`Erro ao salvar perfil: ${err?.message || "Tente novamente."}`)
     } finally {
       setLoading(false)
     }
@@ -352,41 +323,41 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
     if (!user) return
 
     try {
-      console.log("[v0] Exporting user data...")
-
-      const { data: profile } = await supabase.from("user_profiles").select("*").eq("user_id", user.id).single()
-      const { data: properties } = await supabase.from("properties").select("*").eq("agency_id", profile?.agency_id)
+      const { data: profile } = await supabase.from("user_profiles").select("*").eq("user_id", user.id).maybeSingle()
+      const { data: properties } = await supabase.from("properties").select("*").eq("user_id", user.id)
       const { data: proposals } = await supabase
         .from("proposals")
         .select("*")
-        .in("property_id", properties?.map((p) => p.id) || [])
-      const { data: activities } = await supabase.from("activity_logs").select("*").eq("user_id", user.id)
+        .in(
+          "property_id",
+          (properties || []).map((p: any) => p.id),
+        )
+      const { data: acts } = await supabase.from("activity_logs").select("*").eq("user_id", user.id)
 
-      const exportData = {
+      const payload = {
         profile,
         properties,
         proposals,
-        activities,
+        activities: acts,
         notifications,
         exportDate: new Date().toISOString(),
         version: "1.0",
       }
 
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
       link.download = `atria-backup-${new Date().toISOString().split("T")[0]}.json`
       link.click()
       URL.revokeObjectURL(url)
-
-      console.log("[v0] Data exported successfully")
-    } catch (error) {
-      console.error("[v0] Error exporting data:", error)
+    } catch (err) {
+      console.error("[v0] Error exporting data:", err)
       alert("Erro ao exportar dados. Tente novamente.")
     }
   }
 
+  // ------------ UI ------------
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
@@ -427,6 +398,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
           </TabsList>
 
           <div className="flex-1 overflow-y-auto py-6 space-y-6">
+            {/* PROFILE */}
             <TabsContent value="profile" className="space-y-6 mt-0">
               <Card>
                 <CardHeader>
@@ -589,6 +561,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
               </Card>
             </TabsContent>
 
+            {/* SECURITY */}
             <TabsContent value="security" className="space-y-6 mt-0">
               <Card>
                 <CardHeader>
@@ -617,7 +590,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
                         variant="ghost"
                         size="sm"
                         className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
+                        onClick={() => setShowPassword((s) => !s)}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
@@ -687,6 +660,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
               </Card>
             </TabsContent>
 
+            {/* NOTIFICATIONS */}
             <TabsContent value="notifications" className="space-y-6 mt-0">
               <Card>
                 <CardHeader>
@@ -747,6 +721,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
               </Card>
             </TabsContent>
 
+            {/* ACTIVITY */}
             <TabsContent value="activity" className="space-y-6 mt-0">
               <Card>
                 <CardHeader>
@@ -782,6 +757,7 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
               </Card>
             </TabsContent>
 
+            {/* DATA */}
             <TabsContent value="data" className="space-y-6 mt-0">
               <Card>
                 <CardHeader>

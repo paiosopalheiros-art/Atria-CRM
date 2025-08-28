@@ -1,28 +1,26 @@
 import type { NextRequest } from "next/server"
-import { ApiResponseHelper } from "@/lib/api-response"
-import { AuthService } from "@/lib/auth"
+import { NextResponse } from "next/server"
+import { createServerSupabase } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await AuthService.getUserFromToken(request)
+    const supabase = await createServerSupabase()
 
-    if (!user) {
-      return ApiResponseHelper.unauthorized("Token inválido ou expirado")
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error || !user) {
+      return NextResponse.json({ error: "Token inválido ou expirado" }, { status: 401 })
     }
 
-    return ApiResponseHelper.success({
+    return NextResponse.json({
       id: user.id,
       email: user.email,
-      fullName: user.full_name,
-      userType: user.user_type,
-      creci: user.creci,
-      cpf: user.cpf,
-      rg: user.rg,
-      address: user.address,
-      phone: user.phone,
     })
   } catch (error) {
     console.error("Get user error:", error)
-    return ApiResponseHelper.serverError("Erro interno do servidor")
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
