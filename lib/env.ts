@@ -31,14 +31,23 @@ function validateEnv() {
     if (error instanceof z.ZodError) {
       const missingVars = error.errors.map((err) => `${err.path.join(".")}: ${err.message}`).join("\n")
 
-      console.error("❌ Environment validation failed:")
-      console.error(missingVars)
-      console.error("\n📝 Please check your environment variables in Project Settings.")
-      console.error(
+      console.warn("⚠️ Environment validation failed, running in demo mode:")
+      console.warn(missingVars)
+      console.warn("\n📝 To use real Supabase, configure these variables in Project Settings.")
+      console.warn(
         "🔗 Required variables: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET",
       )
 
-      throw new Error(`Environment validation failed:\n${missingVars}`)
+      // Return default values for demo mode
+      return {
+        NODE_ENV: process.env.NODE_ENV || "development",
+        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || "https://demo.supabase.co",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "demo-key",
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || "demo-service-key",
+        SUPABASE_JWT_SECRET: process.env.SUPABASE_JWT_SECRET || "demo-jwt-secret",
+        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "https://web-mobile-connect.preview.emergentagent.com",
+        NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || "https://web-mobile-connect.preview.emergentagent.com"
+      }
     }
     throw error
   }
