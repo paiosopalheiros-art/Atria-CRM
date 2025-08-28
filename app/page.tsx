@@ -146,7 +146,7 @@ export default function AtriaApp() {
   console.log("[v0] Loading state details:", { loading, timestamp: new Date().toISOString() })
 
   if (loading || (user && profileLoading)) {
-    console.log("[v0] Rendering loading screen")
+    console.log("[v0] Rendering loading screen at:", new Date().toISOString())
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-8">
