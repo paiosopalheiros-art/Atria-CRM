@@ -54,7 +54,9 @@ export default function RootLayout({
               https://privacy-vercel.us.fides.ethyca.com/api/v1/
               https://api.getkoala.com
               https://*.sentry.io/api/
-              https://api.v0.dev;
+              https://api.v0.dev
+              https://kermaslevtipgdlylzxe.supabase.co
+              https://*.supabase.co;
           "
         />
       </head>
