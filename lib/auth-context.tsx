@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      console.log("[v0] Starting auth check...")
+      console.log("[v0] Starting real Supabase auth check...")
 
       const supabase = createClient()
       const {
@@ -38,12 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error("[v0] Auth check error:", error)
-        // In demo mode, create a demo user
-        console.log("[v0] Setting demo user")
-        setUser({
-          id: "demo-user-id",
-          email: "paiosopalheiros@gmail.com"
-        })
+        setUser(null)
       } else if (session?.user) {
         console.log("[v0] Found real session:", session.user.email)
         setUser({
@@ -51,20 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: session.user.email || "",
         })
       } else {
-        console.log("[v0] No session found, using demo mode")
-        // For demo purposes, set a demo user
-        setUser({
-          id: "demo-user-id", 
-          email: "paiosopalheiros@gmail.com"
-        })
+        console.log("[v0] No session found")
+        setUser(null)
       }
     } catch (error) {
       console.error("[v0] Auth check failed:", error)
-      // Fallback to demo user
-      setUser({
-        id: "demo-user-id",
-        email: "paiosopalheiros@gmail.com"
-      })
+      setUser(null)
     } finally {
       console.log("[v0] Auth check completed, setting loading to false")
       setLoading(false)
