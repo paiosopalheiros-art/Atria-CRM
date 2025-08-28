@@ -32,9 +32,9 @@ class WebMobileConnectTester:
             if method == 'GET':
                 response = requests.get(url, headers=headers, params=params, timeout=10)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=headers, timeout=10)
+                response = requests.post(url, json=data, headers=headers, params=params, timeout=10)
             elif method == 'PUT':
-                response = requests.put(url, json=data, headers=headers, timeout=10)
+                response = requests.put(url, json=data, headers=headers, params=params, timeout=10)
             
             return True, response
         except Exception as e:
