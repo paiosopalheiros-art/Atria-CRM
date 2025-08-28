@@ -183,12 +183,10 @@ class WebMobileConnectTester:
         if not self.created_user_id:
             return self.log_test("Mobile Sync", False, "- No user ID available")
         
-        sync_data = {
-            "user_id": self.created_user_id,
-            "last_sync": (datetime.utcnow() - timedelta(hours=1)).isoformat()
-        }
+        # Check the backend code - it expects user_id as query param, not in body
+        params = {"user_id": self.created_user_id}
         
-        success, response = self.make_request('POST', 'mobile/sync', sync_data)
+        success, response = self.make_request('POST', 'mobile/sync', params=params)
         if success and response.status_code == 200:
             data = response.json()
             if data.get('success') and 'sync_time' in data:
@@ -197,6 +195,8 @@ class WebMobileConnectTester:
                 return self.log_test("Mobile Sync", False, f"- Invalid sync response: {data}")
         else:
             error_msg = response if isinstance(response, str) else f"Status: {response.status_code}"
+            if hasattr(response, 'text'):
+                error_msg += f" - {response.text}"
             return self.log_test("Mobile Sync", False, f"- {error_msg}")
 
     def test_create_mobile_user(self):
