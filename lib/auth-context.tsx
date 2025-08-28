@@ -23,6 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    console.log("[v0] AuthProvider useEffect triggered - calling checkAuth")
     checkAuth()
   }, [])
 
