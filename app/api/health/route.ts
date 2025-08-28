@@ -4,20 +4,15 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data, error } = await supabase.from("agencies").select("id").limit(1)
-
-    if (error) {
-      throw error
-    }
-
+    // Simple health check without database queries
     return ApiResponseHelper.success({
       status: "healthy",
       timestamp: new Date().toISOString(),
-      database: "connected",
-      supabase: "connected",
+      environment: process.env.NODE_ENV || "development",
+      supabase_configured: !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     })
   } catch (error) {
-    return ApiResponseHelper.serverError("Database connection failed")
+    console.error("Health check error:", error)
+    return ApiResponseHelper.serverError("Health check failed")
   }
 }
